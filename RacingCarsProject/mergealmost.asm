@@ -174,12 +174,191 @@ checkSmallBoxColor macro x,y,c,s,chkr
     finishcheckdb:
 endm checkSmallBoxColor
 
+showusermacro macro pos,c,counternamesize,namesize,username
+    local labelshowuName
+    mov ah,2
+    mov dx,pos
+    int 10h
+
+    mov counternamesize,0
+    lea si,username
+    labelshowuName:
+    mov ah,9
+    mov bh,0
+    mov al,[si]
+    mov cx,1
+    mov bl,c
+    int 10h
+    inc dx
+    mov ah,2
+    int 10h
+    inc counternamesize
+    inc si
+    push ax
+    mov ax,0
+    mov ah,namesize
+    cmp counternamesize,ah
+    pop ax
+    jne labelshowuName
+endm showusermacro
+
 .286
 .MODEL large
 .STACK 128
 
 
 .DATA
+
+colorcara db 39
+colorcarb db 9
+;---------------------------usersdata--------------------------
+
+;---------------------------user1data--------------------------
+
+puser1name dw 1501h
+counteruser1size db 0
+User1Name db "yoyo",'$'
+user1size db $-User1Name-1
+xuser1car  dw 40+user1size
+yuser1car  dw 171
+user1posita db 'w'
+puser1score dw 1701h
+counteruser1sizescore db 0
+user1score  db 'score:','$'
+user1sizescore db $-User1score-1
+puser1scorenum dw 1707h
+counteruser1sizescorenum db 0
+user1scorenum db  '0','$'
+user1sizescorenum db $-User1scorenum-1
+
+;---------------------------user2data--------------------------
+
+puser2name dw 1541h
+counteruser2size db 0
+User2Name db "momo",'$'
+user2size db $-User2Name-1
+xuser2car  dw 200+user2size
+yuser2car  dw 172
+user2positb db 'w'
+puser2score dw 1741h
+counteruser2sizescore db 0
+user2score  db 'score:','$'
+user2sizescore db $-User2score-1
+puser2scorenum dw 1747h
+counteruser2sizescorenum db 0
+user2scorenum db  '0','$'
+user2sizescorenum db $-User2scorenum-1
+
+;---------------------------PATHDATA---------------------------
+
+
+pathCount equ 80d
+trackWidth equ 16d
+streetLength equ 10d
+finishLength equ 6d
+alternatingFinish equ 2d
+verticalScreen equ 160d
+horizontalScreen equ 320d
+smallmargin equ 5d
+pathsize equ 5000
+obstacleDim equ 5
+powerupsDim equ 3
+obsProb equ 10
+powerupProb equ 1
+obsColor equ 4
+powerUpsColor equ 3
+up equ 0
+down equ 2
+left equ 4
+right equ 6
+powerupsmxCount equ 3 ;max count for each randomization
+
+speedPower equ 1d ;blue
+slowDownPower equ 10d ;green
+placeWall equ 3d ;cyan
+passWall equ 5d ;magenta
+rocketPower equ 13d ;light magenta
+
+
+
+randomNum dw ?
+
+curStCol dw ?
+curStRow dw ?
+curEnCol dw ?
+curEnRow dw ?
+
+minx dw ?
+maxx dw ?
+miny dw ?
+maxy dw ?
+
+msg db 'Creating the racing track..$'
+
+newDirection dw 0
+
+pathDrawn dw 0 ;bool to check if a path is drawn
+suitableStreet dw 0
+
+pathDirection_X dw 0, 0, -1, 1
+pathDirection_Y dw -1, 1, 0, 0
+pathOpposites dw -1, 1, -2, 2
+curDirection dw up; see directions above, set starting direction here
+prevDirection dw up
+
+extraPathDirection_X dw 1, -1, -1, 1 
+extraPathDirection_Y dw -1, 1, -1, 1
+xMul dw 0
+yMul dw 0
+
+
+i dw 0
+j dw 0
+firstColor db 15d
+secondColor db 0d
+firstLineCounter dw 0
+secondLineCounter dw 0
+
+;path array
+curIdx dw 0
+savedDirections dw pathsize dup(?)
+pathLine1_X dw pathsize dup(?)
+pathLine1_Y dw pathsize dup(?)
+pathLine2_X dw pathsize dup(?)
+pathLine2_Y dw pathsize dup(?)
+pathFreq db 8192 dup(0) ;8k frequency array path
+
+
+bothPixels db ?
+blockedDirx dw 4 dup(0)
+blkdOpposites dw 2, 0, 6, 4
+x1 dw ?
+x2 dw ?
+y1 dw ?
+y2 dw ?
+ud db ?
+
+dontDraw db ?
+powerupsCount db 0
+drawnboxlast db 0
+boxProb db ?
+isObs db ?
+boxDim db ?
+halfBox db ?
+boxDrawn db ?
+boxDirection dw (obstacleDim + 1) / 2, -(obstacleDim + 1) / 2, (obstacleDim + 1) / 2, -(obstacleDim + 5) / 2
+obsdrawn db 0
+powerupsdrawn db 0
+stopdrawingpowers db 0
+powerUpsRand db speedPower, slowDownPower, placeWall, passWall, rocketPower
+chkboolBox db 0
+sc db ? ;block check color
+
+xBox dw ?
+yBox dw ?
+cBox db ?
+sBox dw ?
+sBoxBigger dw ?
 
 ;---------------------CARDATA---------------
 
@@ -192,8 +371,6 @@ canmovecara db 0d
 
 canmovecarb db 0d
 
-colorcara db 39
-colorcarb db 9
 
 car1image DB 39, 39, 39, 39, 39, 39, 20, 39, 20, 39, 16, 16, 39, 16, 16, 16
           DB 16, 39, 16, 16, 20, 39, 16, 39, 20, 20, 39, 16, 39, 20, 20, 39
@@ -269,6 +446,7 @@ BlockWidth db 3d
 BlockLength db 3d
 BlockWidth2 dw 3d
 BlockLength2 dw 3d
+RepeatTime db 0d
 
 ; <rocket>
 
@@ -287,8 +465,8 @@ FreezeEnd db 0d
 colorclearrocket db 08h
 colordrawrocket  db 0eh
 
-firecara dw 1
-firecarb dw 1
+firecara dw 0
+firecarb dw 0
 
 rocketmoving dw 0
 
@@ -317,6 +495,8 @@ KeyP equ 19h
 KeyO equ 18h
 KeyI equ 17h
 KeyU equ 16h
+KeyK equ 25h
+KeyG equ 22h
 
 ; <scan key for Car B powers>
 Key1 equ 02h
@@ -331,110 +511,28 @@ KeyEsc    equ 01h
 
 keylist db 128 dup (0)
 
-;---------------------------PATHDATA---------------------------
+;-------------------------------------backGround------------------------------------------
+bgWidth equ 32
+bgHeight equ 20
 
-
-pathCount equ 70d
-trackWidth equ 16d
-streetLength equ 10d
-finishLength equ 6d
-alternatingFinish equ 2d
-verticalScreen equ 160d
-horizontalScreen equ 320d
-smallmargin equ 5d
-pathsize equ 5000
-obstacleDim equ 5
-powerupsDim equ 3
-obsProb equ 3
-powerupProb equ 1
-obsColor equ 4
-powerUpsColor equ 3
-up equ 0
-down equ 2
-left equ 4
-right equ 6
-speedPower equ 1d ;blue
-slowDownPower equ 2d ;green
-placeWall equ 3d ;cyan
-passWall equ 5d ;magenta
-rocketPower equ 13d ;light magenta
-randomNum dw ?
-
-curStCol dw ?
-curStRow dw ?
-curEnCol dw ?
-curEnRow dw ?
-
-minx dw ?
-maxx dw ?
-miny dw ?
-maxy dw ?
-
-msg db 'Creating the racing track..$'
-
-newDirection dw 0
-
-pathDrawn dw 0 ;bool to check if a path is drawn
-suitableStreet dw 0
-
-pathDirection_X dw 0, 0, -1, 1
-pathDirection_Y dw -1, 1, 0, 0
-pathOpposites dw -1, 1, -2, 2
-curDirection dw up; see directions above, set starting direction here
-prevDirection dw up
-
-extraPathDirection_X dw 1, -1, -1, 1 
-extraPathDirection_Y dw -1, 1, -1, 1
-xMul dw 0
-yMul dw 0
-
-
-i dw 0
-j dw 0
-firstColor db 15d
-secondColor db 0d
-firstLineCounter dw 0
-secondLineCounter dw 0
-
-;path array
-curIdx dw 0
-savedDirections dw pathsize dup(?)
-pathLine1_X dw pathsize dup(?)
-pathLine1_Y dw pathsize dup(?)
-pathLine2_X dw pathsize dup(?)
-pathLine2_Y dw pathsize dup(?)
-pathFreq db 8192 dup(0) ;8k frequency array path
-
-
-bothPixels db ?
-blockedDirx dw 4 dup(0)
-blkdOpposites dw 2, 0, 6, 4
-x1 dw ?
-x2 dw ?
-y1 dw ?
-y2 dw ?
-ud db ?
-
-dontDraw db ?
-
-boxProb db ?
-isObs db ?
-boxDim db ?
-halfBox db ?
-boxDrawn db ?
-boxDirection dw (obstacleDim + 1) / 2, -(obstacleDim + 1) / 2, (obstacleDim + 1) / 2, -(obstacleDim + 5) / 2
-obsdrawn db 0
-powerupsdrawn db 0
-powerUpsRand db speedPower, slowDownPower, placeWall, passWall, rocketPower
-chkboolBox db 0
-sc db ? ;block check color
-
-xBox dw ?
-yBox dw ?
-cBox db ?
-sBox dw ?
-sBoxBigger dw ?
-
+bgimg DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ 
+ 
 
 .CODE
 
@@ -549,7 +647,7 @@ ClearBlock proc
   go:
   mov BlockWidth,3d
   mov BlockLength,3d
-   mov BlockWidth2,3d
+  mov BlockWidth2,3d
   mov BlockLength2,3d
   red:
   l1:
@@ -575,7 +673,8 @@ ClearBlock proc
   mov di,si
   mov si,TemporaryPixle
   clear:
-  mov es:[di],8d
+  mov al,8d
+  mov es:[di],al
   dec bl
   inc di
   cmp bl,0
@@ -656,7 +755,7 @@ checkmovecaraKeyUPKeyDOWN proc
     mov TemporaryPixle,si
     jmp clearB1
     checkdelay1:
-    cmp al,2d
+    cmp al,10d
     jne checkwallplace1
     mov HaveSpeedA,0
     mov obstacleA,0
@@ -675,11 +774,17 @@ checkmovecaraKeyUPKeyDOWN proc
     jmp clearB1
     checkwallpass1:
     cmp al,5d
-    jne checkwallexist1
+    jne checkrocket
     mov HaveSpeedA,0
     mov obstacleA,0
     mov HaveDelayA,0
     mov HavePassA,1
+    mov TemporaryPixle,si
+    jmp clearB1
+    checkrocket:
+    cmp al,13d
+    jne checkwallexist1
+    mov firecara,1
     mov TemporaryPixle,si
     jmp clearB1
     checkwallexist1:
@@ -743,7 +848,7 @@ checkmovecaraKeyRIGHTKeyLEFT proc
     mov TemporaryPixle,si
     jmp clearB3
     checkdelay3:
-    cmp al,2d
+    cmp al,10d
     jne checkwallplace3
     mov HaveSpeedA,0
     mov obstacleA,0
@@ -755,18 +860,24 @@ checkmovecaraKeyRIGHTKeyLEFT proc
     cmp al,3d
     jne checkwallpass3
     mov HaveSpeedA,0
+    mov obstacleA,1
+    mov HaveDelayA,0
+    mov HavePassA,0
+    mov TemporaryPixle,si
+    jmp clearB3
+    checkwallpass3:
+    cmp al,5d
+    jne checkrocket2
+    mov HaveSpeedA,0
     mov obstacleA,0
     mov HaveDelayA,0
     mov HavePassA,1
     mov TemporaryPixle,si
     jmp clearB3
-    checkwallpass3:
-    cmp al,5d
+    checkrocket2:
+    cmp al,13d
     jne checkwallexist3
-    mov HaveSpeedA,0
-    mov obstacleA,0
-    mov HaveDelayA,0
-    mov HavePassA,1
+    mov firecara,1
     mov TemporaryPixle,si
     jmp clearB3
     checkwallexist3:
@@ -910,7 +1021,7 @@ movecarA PROC       ; check the new position of car a
     jne norocketpresscara
     cmp firecara,1
     jne norocketpresscara
-    ; mov firecara,0
+    mov firecara,0
     call launchrocketcara
     norocketpresscara:
     mov ax,velocitya
@@ -1199,7 +1310,7 @@ checkmovecarbKeyUPKeyDOWN proc
     mov TemporaryPixle,si
     jmp clearB
     checkdelay:
-    cmp al,2d
+    cmp al,10d
     jne checkwallplace
     mov HaveSpeedB,0
     mov obstacleB,0
@@ -1218,11 +1329,17 @@ checkmovecarbKeyUPKeyDOWN proc
     jmp clearB
     checkwallpass:
     cmp al,5d
-    jne checkwallexist
+    jne checkrocket3
     mov HaveSpeedB,0
     mov obstacleB,0
     mov HaveDelayB,0
     mov HavePassB,1
+    mov TemporaryPixle,si
+    jmp clearB
+    checkrocket3:
+    cmp al,13d
+    jne checkwallexist
+    mov firecarb,1
     mov TemporaryPixle,si
     jmp clearB
     checkwallexist:
@@ -1275,29 +1392,48 @@ checkmovecarbKeyRIGHTKeyLEFT proc
     checkpixels2carb:
     mov al,es:[si]
     cmp al,08h
-    je contcheck2
+    jne checkspeed2
+    jmp contcheck2
     checkspeed2:
     cmp al,1d
     jne checkdela2
     mov HaveSpeedB,1
+    mov HaveDelayB,0
+    mov obstacleB,0
+    mov HavePassB,0
     mov TemporaryPixle,si
     jmp clearB2
     checkdela2:
-    cmp al,2d
+    cmp al,10d
     jne checkwallplace2
-    mov HaveDelayB,1d
+     mov HaveSpeedB,0
+    mov HaveDelayB,1
+    mov obstacleB,0
+    mov HavePassB,0
     mov TemporaryPixle,si
     jmp clearB2
     checkwallplace2:
     cmp al,3d
     jne checkwallpass2
-    mov obstacleB,1d
+     mov HaveSpeedB,0
+    mov HaveDelayB,0
+    mov obstacleB,1
+    mov HavePassB,0
     mov TemporaryPixle,si
     jmp clearB2
     checkwallpass2:
     cmp al,5d
+    jne checkrocket4
+     mov HaveSpeedB,0
+    mov HaveDelayB,0
+    mov obstacleB,0
+    mov HavePassB,1
+    mov TemporaryPixle,si
+    jmp clearB2
+    checkrocket4:
+    cmp al,13d
     jne checkwallexist2
-    mov HavePassB,1d
+    mov firecarb,1
     mov TemporaryPixle,si
     jmp clearB2
     checkwallexist2:
@@ -1313,12 +1449,16 @@ checkmovecarbKeyRIGHTKeyLEFT proc
     add si,320
     dec cl
     cmp cl,0
-    jne checkpixels2carb
+    je contcheck5
+    jmp checkpixels2carb
+    contcheck5:
     sub si,car_width * 320 + 1
     mov cl,car_width
     dec ch
     cmp ch,0
-    jne checkpixels2carb
+    je contcheck4
+    jmp checkpixels2carb
+    contcheck4:
     mov canmovecarb,0
     jmp finishcheckmovecarbKeyRIGHTKeyLEFT
     therepixelnotblack2carb:
@@ -1370,10 +1510,10 @@ checkDoubleButtonsKeyUPcarb proc
     add al, [byte ptr keylist + KeyRIGHT]
     add al, [byte ptr keylist + KeyLEFT]
     cmp ax,2
-    jb finishcheckDoubleButtonsKeyUPcarb
+    jb finishcheckDoubleButtonscarb
     mov al,positb
     mov positnb,al
-    finishcheckDoubleButtonsKeyUPcarb:
+    finishcheckDoubleButtonscarb:
   ret
 checkDoubleButtonsKeyUPcarb endp
 
@@ -1410,11 +1550,11 @@ launchrocketcarb endp
 
 
 movecarB PROC       ; check the new position of car b
-     mov velocityb,1
-    cmp ActivateSpeedB,1
-    jne nospeedb
-    mov velocityb,2
-    nospeedb:
+  mov velocityb,1
+  cmp ActivateSpeedB,1
+  jne nospeedb
+  mov velocityb,2
+  nospeedb:
   cmp delaycarb,0
   je contdelaycarb
   jmp far ptr finishmovebwithdelaycarb
@@ -1436,7 +1576,7 @@ movecarB PROC       ; check the new position of car b
   jne norocketpresscarb
   cmp firecarb,1
   jne norocketpresscarb
-  ;mov firecarb,0
+  mov firecarb,0
   call launchrocketcarb
   norocketpresscarb:
   mov ax,velocityb
@@ -1575,7 +1715,7 @@ check1:
 mov ch,5d
 checkb2:
 mov al,es:[si]
-cmp al,0d
+cmp al,8d
 jne notblack
 inc si
 dec ch
@@ -1619,14 +1759,14 @@ ret
 generateBox endp
 
 ActivatePass PROC
-cmp [byte ptr keylist + KeyP], 1
+cmp [byte ptr keylist + KeyG], 1
 jne che2
 cmp HavePassA,1d
 jne che2
 mov ActivatePassA,1d
 mov HavePassA,0d
 che2:
-cmp [byte ptr keylist + Key1], 1
+cmp [byte ptr keylist + KeyK], 1
 jne finactivate
 cmp HavePassB,1d
 jne finactivate
@@ -1639,11 +1779,11 @@ ActivatePass endp
 
 
 generateObsA PROC
-    cmp [byte ptr keylist + KeyP], 1
+    cmp [byte ptr keylist + KeyG], 1
     je de1
     jmp ch2
     ch2:
-    cmp [byte ptr keylist + Key1], 1
+    cmp [byte ptr keylist + KeyK], 1
     je de2
     jmp dis
     de1:
@@ -1683,7 +1823,7 @@ generateObsA PROC
   mov xBlack,ax
   mov yBlack,bx
   sub xBlack,3d
-  sub yBlack,10d
+  sub yBlack,11d
   jmp finishGen
   copa:
   cmp positToCompare,'a'
@@ -1714,7 +1854,7 @@ generateObsA PROC
 generateObsA endp
 
 ActivateSpeed proc
-  cmp [byte ptr keylist + KeyP], 1
+  cmp [byte ptr keylist + KeyG], 1
   jne gocar2
   cmp HaveSpeedA,1
   jne gocar2
@@ -1724,8 +1864,13 @@ ActivateSpeed proc
   int 21h
   mov StartTimeSpeedA,dh
   add StartTimeSpeedA,5d
+  mov al,StartTimeSpeedA
+  mov StartTimeSpeedA,60d
+  mov ah,0
+  div StartTimeSpeedA
+  mov StartTimeSpeedA,ah
   gocar2:
-  cmp [byte ptr keylist + Key1], 1
+  cmp [byte ptr keylist + KeyK], 1
   jne endSpeed
   cmp HaveSpeedB,1
   jne endSpeed
@@ -1735,13 +1880,18 @@ ActivateSpeed proc
   int 21h
   mov StartTimeSpeedB,dh
   add StartTimeSpeedB,5d
+  mov al,StartTimeSpeedB
+  mov StartTimeSpeedB,60d
+  mov ah,0
+  div StartTimeSpeedB
+  mov StartTimeSpeedB,ah
 
   endSpeed:
 ret
 ActivateSpeed endp
 
 ActivateDelay proc
-  cmp [byte ptr keylist + KeyP], 1
+  cmp [byte ptr keylist + KeyG], 1
   jne checkDelay2
   cmp HaveDelayA,1
   jne checkDelay2
@@ -1750,9 +1900,14 @@ ActivateDelay proc
   int 21h
   mov StartDelayA,dh
   add StartDelayA,5d
+  mov al,StartDelayA
+  mov StartDelayA,60d
+  mov ah,0
+  div StartDelayA
+  mov StartDelayA,ah
   mov ActivateDelayB,1
   checkDelay2:
-  cmp [byte ptr keylist + Key1], 1
+  cmp [byte ptr keylist + KeyK], 1
   jne finishDelay
   cmp HaveDelayB,1
   jne finishDelay
@@ -1761,6 +1916,11 @@ ActivateDelay proc
   int 21h
   mov StartDelayB,dh
   add StartDelayB,5d
+  mov al,StartDelayB
+  mov StartDelayB,60d
+  mov ah,0
+  div StartDelayB
+  mov StartDelayB,ah
   mov ActivateDelayA,1
   finishDelay:
 ret
@@ -1874,25 +2034,25 @@ handlekeylist proc far
   mov [byte ptr keylist + KeyLEFT],0
   jmp finishhandlekeylist
   kn8:
-  cmp al,KeyP
+  cmp al,KeyG
   jne k9
-  mov [byte ptr keylist + KeyP],1
+  mov [byte ptr keylist + KeyG],1
   jmp finishhandlekeylist
   k9:
-  cmp al,KeyP+80h
+  cmp al,KeyG+80h
   jne kn9
-  mov [byte ptr keylist + KeyP],0
+  mov [byte ptr keylist + KeyG],0
   jmp finishhandlekeylist
   ;;;;
   kn9:
-  cmp al,Key1
+  cmp al,KeyK
   jne k10
-  mov [byte ptr keylist + Key1],1
+  mov [byte ptr keylist + KeyK],1
   jmp finishhandlekeylist
   k10:
-  cmp al,Key1+80h
+  cmp al,KeyK+80h
   jne kn10
-  mov [byte ptr keylist + Key1],0
+  mov [byte ptr keylist + KeyK],0
    kn10:
   cmp al,KeyO
   jne k11
@@ -2015,8 +2175,21 @@ checkrocketcollision2 proc
   mul ynrocket
   add ax,xnrocket
   mov si,ax
+  mov al,0
   mov al,es:[si]
-  cmp al,colorcara
+  cmp al,8
+  jne contcheckcarb21
+  jmp checkcarb2
+  contcheckcarb21:
+  cmp al,16
+  jne contcheckcarb22
+  jmp checkcarb2
+  contcheckcarb22:
+  cmp al,20
+  jne contcheckcarb23
+  jmp checkcarb2
+  contcheckcarb23:
+  cmp al,[colorcara]
   jne checkcara2
   mov whatrocketcollision,'a'
   mov isrocketcollision,1
@@ -2024,29 +2197,35 @@ checkrocketcollision2 proc
   int 21h
   mov FreezeEnd,dh
   add FreezeEnd,5d
+  mov al,FreezeEnd
+  mov FreezeEnd,60d
+  mov ah,0
+  div FreezeEnd
+  mov FreezeEnd,ah
   mov rocketmoving,0
   jmp finishcheckrocketcollision2
   checkcara2:
   cmp al,colorcarb
-  jne checkcarb2
+  jne checkwall2
   mov whatrocketcollision,'b'
   mov isrocketcollision,1
   mov ah,2ch   
   int 21h
   mov FreezeEnd,dh
   add FreezeEnd,5d
+  mov al,FreezeEnd
+  mov FreezeEnd,60d
+  mov ah,0
+  div FreezeEnd
+  mov FreezeEnd,ah
   mov rocketmoving,0
   jmp finishcheckrocketcollision2
-  checkcarb2:
-  cmp al,colordrawrocket
-  je checkwall2
-  cmp al,colorclearrocket
-  je checkwall2 
+  checkwall2:
   mov whatrocketcollision,'w'
   mov isrocketcollision,1
   mov rocketmoving,0
   jmp finishcheckrocketcollision2
-  checkwall2:
+  checkcarb2:
   mov isrocketcollision,0
   finishcheckrocketcollision2:
   ret
@@ -2058,8 +2237,21 @@ checkrocketcollision1 proc
   mul yn1rocket
   add ax,xn1rocket
   mov si,ax
+  mov al,0
   mov al,es:[si]
-  cmp al,colorcara
+  cmp al,8
+  jne contcheckcarb11
+  jmp checkcarb1
+  contcheckcarb11:
+  cmp al,16
+  jne contcheckcarb12
+  jmp checkcarb1
+  contcheckcarb12:
+  cmp al,20
+  jne contcheckcarb13
+  jmp checkcarb1
+  contcheckcarb13:
+  cmp al,[colorcara]
   jne checkcara1
   mov whatrocketcollision,'a'
   mov isrocketcollision,1
@@ -2067,29 +2259,38 @@ checkrocketcollision1 proc
   int 21h
   mov FreezeEnd,dh
   add FreezeEnd,5d
+  mov al,FreezeEnd
+  mov FreezeEnd,60d
+  mov ah,0
+  div FreezeEnd
+  mov FreezeEnd,ah
   mov rocketmoving,0
   jmp finishcheckrocketcollision1
   checkcara1:
   cmp al,colorcarb
-  jne checkcarb1
+  jne checkwall1
   mov whatrocketcollision,'b'
   mov isrocketcollision,1
   mov ah,2ch   
   int 21h
   mov FreezeEnd,dh
   add FreezeEnd,5d
-  mov rocketmoving,0
-  jmp finishcheckrocketcollision1
-  checkcarb1:
-  cmp al,colordrawrocket
-  je checkwall1
-  cmp al,colorclearrocket
-  je checkwall1
-  mov whatrocketcollision,'w'
-  mov isrocketcollision,1
+  mov al,FreezeEnd
+  mov FreezeEnd,60d
+  mov ah,0
+  div FreezeEnd
+  mov FreezeEnd,ah
   mov rocketmoving,0
   jmp finishcheckrocketcollision1
   checkwall1:
+  mov whatrocketcollision,'w'
+  mov isrocketcollision,1
+  mov ah,2ch   
+  int 21h
+  mov FreezeEnd,dh
+  mov rocketmoving,0
+  jmp finishcheckrocketcollision1
+  checkcarb1:
   mov isrocketcollision,0
   finishcheckrocketcollision1:
   ret
@@ -2120,10 +2321,10 @@ movrocket proc
   finishmovenewrocket:
 
 
-  call checkrocketcollision2
+  call checkrocketcollision1
   cmp isrocketcollision,0
   jne jumpcontoooo
-  call checkrocketcollision1
+  call checkrocketcollision2
   jumpcontoooo:
 
 
@@ -2164,56 +2365,6 @@ overrideInt PROC
     ret
 overrideInt ENDP
 
-moveCars PROC
-    drawinitcar xa,ya,car1image   ; car a
-    drawinitcar xb,yb,car2image   ; car b
-
-    lop:
-    call sleepSomeTime
-
-
-    call handlekeylist
-
-    cmp rocketmoving,1
-    jne movcars
-    call movrocket
-    movcars:
-    cmp isrocketcollision,1
-    jne moa
-    cmp whatrocketcollision,'a'
-    jne moa
-    mov ah,2ch   
-    int 21h
-    cmp FreezeEnd,dh
-    jne mob
-    mov isrocketcollision,0d
-    moa:
-    call movecarA
-    cmp isrocketcollision,1
-    jne mob
-    cmp whatrocketcollision,'b'
-    jne mob
-    mov ah,2ch   
-    int 21h
-    cmp FreezeEnd,dh
-    jne nomov
-    mov isrocketcollision,0d
-    mob:
-    call movecarB
-    nomov:
-    call generateObsA
-    call TerminateSpeed
-    call ActivateSpeed
-    call ActivateDelay
-    Call ActivatePass
-
-
-
-    cmp [byte ptr keylist + KeyEsc],1
-    jne lop
-
-    ret
-moveCars ENDP
 
 ;---------------------------------PATH_PROCS---------------------------------------
 setBit PROC
@@ -2278,7 +2429,42 @@ delay PROC
     ret
 delay ENDP
 
-drawBackGround PROC   
+drawBackGround PROC
+    ; mov ax ,0600h
+    ; mov bh,02h
+    ; mov cx,0h
+    ; mov dx,184fh
+    ; int 10h
+    mov bx, 0
+    mov dx, 0
+    lee: 
+    mov di,bx
+    cld
+    lea si,bgimg
+    mov al,0
+    laa:
+    mov cx,bgWidth
+    rep movsb
+    add di,320-bgWidth
+    inc al
+    cmp al,bgheight
+    jne laa
+    add bx,bgWidth
+    inc dl
+    cmp dl,10
+    jne lee
+    mov dl, 0
+    inc dh
+    add bx, (bgheight - 1)*320
+    cmp dh,10
+    jne lee
+    ;STATUS BAR BACKGROUND
+    mov ax ,0600h
+    mov bh,00h
+    mov ch,20
+    mov cl,0h
+    mov dx,184fh
+    int 10h   
     ret
 drawBackGround ENDP
 
@@ -2568,7 +2754,11 @@ checkDrawBox PROC
     ja checkNotLast
     jmp contBox
     checkNotLast:
-    cmp j, pathCount
+    cmp drawnboxlast, 0
+    jz wasntdrawn
+    jmp contbox
+    wasntdrawn:
+    cmp j, pathCount - 1
     jb valid
     jmp contBox
     valid:
@@ -2599,6 +2789,13 @@ checkDrawBox PROC
     jmp done
     drawnPowerup:
     mov powerupsdrawn, 1
+    inc powerupscount
+    mov al, powerupsmxcount
+    cmp powerupscount, al
+    jz stoppowers
+    jnz done
+    stoppowers:
+    mov stopdrawingPowers, 1
     done:
     call genRandom
     mov bl, 0
@@ -3545,6 +3742,9 @@ drawPath PROC
     mov yMul, 0
     mov j, 0
     mov [powerupsdrawn], 0
+    mov powerupscount, 0
+    mov stopdrawingpowers, 0
+    mov drawnboxlast, 0
 
     ;MAIN FUNCTION draws the whole track
 
@@ -3569,6 +3769,10 @@ drawPath PROC
             powerUps:
             call setPowerUp
             call checkDrawBox
+            cmp stopdrawingpowers, 1
+            jnz powerscont
+            jmp dontdraw23
+            powerscont:
 
             Drawing_goStreet:
 
@@ -4163,6 +4367,9 @@ drawPath PROC
         pop dx
 
         Drawing_continueOuter:
+        mov al, obsdrawn
+        or al, powerupsdrawn
+        mov drawnboxlast, al
         mov obsdrawn, 0
         mov [powerupsdrawn], 0
     jmp Drawing_pathDraw 
@@ -4176,8 +4383,377 @@ drawPath PROC
     ret
 drawPath ENDP
 
+;--------------------showuserscars-------------------------
+
+clearuser1car proc
+    mov ax,320d
+    mul yuser1car
+    add ax,xuser1car
+    mov di,ax
+    cmp user1posita,'d'
+    je labeluser1clr1                      ; chceck if the car horizontal not vertical 
+    cmp user1posita,'a'
+    je labeluser1clr1
+    sub di,(car_width / 2) + 320 * (car_height / 2)                      ; clear car in vertical view
+    mov al,00h
+    mov cl,0
+    mov ch,0
+    labeluser1clr2:
+    cmp ch,11
+    je labeluser1clr3
+    mov es:[di],al
+    cmp cl,car_width-1
+    je labeluser1clr5
+    inc di
+    inc cl
+    jmp labeluser1clr2
+    labeluser1clr5:
+    add di, 320 - car_width + 1
+    mov cl,0
+    inc ch
+    jmp labeluser1clr2
+    labeluser1clr1:                                   ; clear car in horizontal view 
+    sub di, (car_width / 2) * 320 - car_height / 2
+    mov al,00h
+    mov cl,0
+    mov ch,0
+    labeluser1clr4:
+    cmp ch,11
+    je labeluser1clr3
+    mov es:[di],al
+    cmp cl,car_width-1
+    je labeluser1clr6
+    add di,320
+    inc cl
+    jmp labeluser1clr4
+    labeluser1clr6:
+    sub di,(car_width - 1) * 320 + 1
+    mov cl,0
+    inc ch
+    jmp labeluser1clr4
+    labeluser1clr3:
+    ret
+clearuser1car endp
+
+showuser1carupdown PROC 
+    mov ax,320d
+    mul yuser1car
+    add ax,xuser1car
+    mov di,ax
+    sub di,(car_width / 2) + 320 * (car_height / 2)
+    lea si,car1image
+    cld
+    cmp posita,'s'
+    jne labelshowuser1cardown1
+    std
+    add si,car_width * car_height - 1
+    labelshowuser1cardown1:
+    mov ax,0
+    labelshowuser1carup1:                 
+    mov cx,1
+    rep movsb
+    cmp posita,'s'
+    jne labelshowuser1cardown2
+    add di,2
+    labelshowuser1cardown2:
+    inc al
+    cmp al,car_width
+    jne labelshowuser1carup1
+    inc ah
+    add di,320 - car_width
+    mov al,0
+    cmp ah,car_height
+    jne labelshowuser1carup1
+    ret
+showuser1carupdown ENDP
+
+showuser1carrightleft PROC 
+    mov ax,320d
+    mul yuser1car
+    add ax,xuser1car
+    mov di,ax
+    sub di,(car_width / 2) * 320 - car_height / 2
+    cld
+    lea si,car1image
+    cmp posita,'d'
+    je labeluser1carleft1
+    std
+    add si,car_height * car_width - 1
+    labeluser1carleft1:
+    mov ax,0
+    labeluser1carright1: 
+    mov cx,1                
+    rep movsb
+    cmp posita,'d'
+    je labeluser1carleft2
+    add di,321d
+    jmp labeluser1carleft3
+    labeluser1carleft2:
+    add di,319d
+    labeluser1carleft3:
+    inc al
+    cmp al,car_width
+    jne labeluser1carright1
+    sub di,car_width * 320 + 1
+    inc ah
+    mov al,0
+    cmp ah,car_height
+    jne labeluser1carright1
+    ret
+showuser1carrightleft ENDP
+
+clearuser2car proc
+    mov ax,320d
+    mul yuser2car
+    add ax,xuser2car
+    mov di,ax
+    cmp user2positb,'d'
+    je labeluser2clr1                      ; chceck if the car horizontal not vertical 
+    cmp user2positb,'a'
+    je labeluser2clr1
+    sub di,(car_width / 2) + 320 * (car_height / 2)                      ; clear car in vertical view
+    mov al,00h
+    mov cl,0
+    mov ch,0
+    labeluser2clr2:
+    cmp ch,11
+    je labeluser2clr3
+    mov es:[di],al
+    cmp cl,car_width-1
+    je labeluser2clr5
+    inc di
+    inc cl
+    jmp labeluser2clr2
+    labeluser2clr5:
+    add di, 320 - car_width + 1
+    mov cl,0
+    inc ch
+    jmp labeluser2clr2
+    labeluser2clr1:                                   ; clear car in horizontal view 
+    sub di, (car_width / 2) * 320 - car_height / 2
+    mov al,00h
+    mov cl,0
+    mov ch,0
+    labeluser2clr4:
+    cmp ch,11
+    je labeluser2clr3
+    mov es:[di],al
+    cmp cl,car_width-1
+    je labeluser2clr6
+    add di,320
+    inc cl
+    jmp labeluser2clr4
+    labeluser2clr6:
+    sub di,(car_width - 1) * 320 + 1
+    mov cl,0
+    inc ch
+    jmp labeluser2clr4
+    labeluser2clr3:
+    ret
+clearuser2car endp
+
+showuser2carupdown PROC 
+    mov ax,320d
+    mul yuser2car
+    add ax,xuser2car
+    mov di,ax
+    sub di,(car_width / 2) + 320 * (car_height / 2)
+    lea si,car2image
+    cld
+    cmp positb,'s'
+    jne labelshowuser2cardown1
+    std
+    add si,car_width * car_height - 1
+    labelshowuser2cardown1:
+    mov ax,0
+    labelshowuser2carup1:                 
+    mov cx,1
+    rep movsb
+    cmp positb,'s'
+    jne labelshowuser2cardown2
+    add di,2
+    labelshowuser2cardown2:
+    inc al
+    cmp al,car_width
+    jne labelshowuser2carup1
+    inc ah
+    add di,320 - car_width
+    mov al,0
+    cmp ah,car_height
+    jne labelshowuser2carup1
+    ret
+showuser2carupdown ENDP
+
+showuser2carrightleft PROC 
+    mov ax,320d
+    mul yuser2car
+    add ax,xuser2car
+    mov di,ax
+    sub di,(car_width / 2) * 320 - car_height / 2
+    cld
+    lea si,car2image
+    cmp positb,'d'
+    je labeluser2carleft1
+    std
+    add si,car_height * car_width - 1
+    labeluser2carleft1:
+    mov ax,0
+    labeluser2carright1: 
+    mov cx,1                
+    rep movsb
+    cmp positb,'d'
+    je labeluser2carleft2
+    add di,321d
+    jmp labeluser2carleft3
+    labeluser2carleft2:
+    add di,319d
+    labeluser2carleft3:
+    inc al
+    cmp al,car_width
+    jne labeluser2carright1
+    sub di,car_width * 320 + 1
+    inc ah
+    mov al,0
+    cmp ah,car_height
+    jne labeluser2carright1
+    ret
+showuser2carrightleft ENDP
+
+;--------------------endshowuserscars-------------------------
+
+
+moveCars PROC
+    drawinitcar xa,ya,car1image   ; car a
+    drawinitcar xb,yb,car2image   ; car b
+    mov ah,2ch   
+    int 21h
+    mov RepeatTime,dh
+    add RepeatTime,10d
+    mov al,RepeatTime
+    mov RepeatTime,60d
+    mov ah,0
+    div RepeatTime
+    mov RepeatTime,ah
+
+    lop:
+    call sleepSomeTime
+    mov ah,2ch   
+    int 21h
+    cmp RepeatTime,dh
+    jne continue
+    mov dontDraw, 1
+    call drawPath
+    add RepeatTime,10d
+    mov al,RepeatTime
+    mov RepeatTime,60d
+    mov ah,0
+    div RepeatTime
+    mov RepeatTime,ah
+
+    continue:
+    
+    call handlekeylist
+
+    cmp rocketmoving,1
+    jne movcars
+    call movrocket
+    movcars:
+    cmp isrocketcollision,1
+    jne moa
+    cmp whatrocketcollision,'a'
+    jne moa
+    mov ah,2ch   
+    int 21h
+    cmp FreezeEnd,dh
+    jne mob
+    mov isrocketcollision,0d
+    moa:
+    call movecarA
+    cmp isrocketcollision,1
+    jne mob
+    cmp whatrocketcollision,'b'
+    jne mob
+    mov ah,2ch   
+    int 21h
+    cmp FreezeEnd,dh
+    jne nomov
+    mov isrocketcollision,0d
+    mob:
+    call movecarB
+    nomov:
+    call generateObsA
+    call TerminateSpeed
+    call ActivateSpeed
+    call ActivateDelay
+    Call ActivatePass
+
+    call clearuser1car
+    call clearuser2car
+
+    mov al,posita
+    mov user1posita,al
+    mov al,positb
+    mov user2positb,al
+
+    cmp posita,'d'
+    je labelshowuser1carup
+    cmp posita,'a'
+    je labelshowuser1carup
+    call showuser1carupdown
+    jmp labelshowuser1car
+    labelshowuser1carup:
+    call showuser1carrightleft
+    jmp labelshowuser1car
+    labelshowuser1car:
+
+    cmp positb,'d'
+    je labelshowuser2carup
+    cmp positb,'a'
+    je labelshowuser2carup
+    call showuser2carupdown
+    jmp labelshowuser2car
+    labelshowuser2carup:
+    call showuser2carrightleft
+    jmp labelshowuser2car
+    labelshowuser2car:
+
+    cmp [byte ptr keylist + KeyEsc],1
+    je finishmovecars
+    jmp lop
+    finishmovecars:
+    call clearscreen ; (change)
+    ret
+moveCars ENDP
+
+
+showusername proc
+    mov ax,320
+    mov cx,verticalScreen
+    mul cx
+    mov di,ax
+    mov cx,320
+    labelhorizontalline:
+    mov al,0eh
+    mov es:[di],al
+    inc di
+    loop labelhorizontalline
+
+    showusermacro puser1name,colorcara,counteruser1size,user1size,User1Name
+    showusermacro puser2name,colorcarb,counteruser2size,user2size,User2Name
+    ;----------------------------user1-info-------------------------------------
+    showusermacro puser1score,colorcara,counteruser1sizescore,user1sizescore,user1score
+    showusermacro puser1scorenum,colorcara,counteruser1sizescorenum,user1sizescorenum,user1scorenum
+
+    ;----------------------------user2-info-------------------------------------
+    showusermacro puser2score,colorcarb,counteruser2sizescore,user2sizescore,user2score
+    showusermacro puser2scorenum,colorcarb,counteruser2sizescorenum,user2sizescorenum,user2scorenum
+
+    ret
+showusername endp
+
 
 MAIN PROC FAR
+
     mov ax, @data
     mov ds, ax
     mov ax, 0A000h
@@ -4188,18 +4764,12 @@ MAIN PROC FAR
     call designPath
     call videoMode
     call drawBackGround
+    call showusername
     mov dontDraw, 0
     call drawPath
-
-    mov cx, 3
-    powerUpsLoop:
-        push cx
-        mov dontDraw, 1
-        call drawPath
-        pop cx
-    loop powerUpsLoop
-
-
+    mov dontDraw, 1
+    call drawPath
+    
 
     call moveCars
 
@@ -4207,6 +4777,7 @@ MAIN PROC FAR
     ;terminate 
     mov ah, 4CH
     int 21H
-
+    
+    HLT
 MAIN ENDP
 END MAIN
