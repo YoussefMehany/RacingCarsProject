@@ -213,13 +213,17 @@ colorcara db 39
 colorcarb db 9
 ;---------------------------usersdata--------------------------
 
+weidthimgrocket equ 6
+heigthimgrocket equ 9
+
 ;---------------------------user1data--------------------------
 
 puser1name dw 1501h
 counteruser1size db 0
 User1Name db "yoyo",'$'
 user1size db $-User1Name-1
-xuser1car  dw 40+user1size
+User1color db 39
+xuser1car  dw 68
 yuser1car  dw 171
 user1posita db 'w'
 puser1score dw 1701h
@@ -230,24 +234,47 @@ puser1scorenum dw 1707h
 counteruser1sizescorenum db 0
 user1scorenum db  '0','$'
 user1sizescorenum db $-User1scorenum-1
+counteruser1sizepower db 0
+user1power  db 'powers','$'
+user1sizepower db $-User1power-1
+puser1power dw 150dh
+
+xuser1power dw 135
+yuser1power dw 185
+sizeuser1box equ 6
+
+xuser1rocket dw 110
+yuser1rocket dw 183
 
 ;---------------------------user2data--------------------------
 
-puser2name dw 1541h
+puser2name dw 153ch
 counteruser2size db 0
-User2Name db "momo",'$'
+User2Name db "memo",'$'
 user2size db $-User2Name-1
-xuser2car  dw 200+user2size
+User2color db 9
+xuser2car  dw 220
 yuser2car  dw 172
 user2positb db 'w'
-puser2score dw 1741h
+puser2score dw 173ch
 counteruser2sizescore db 0
 user2score  db 'score:','$'
 user2sizescore db $-User2score-1
-puser2scorenum dw 1747h
+puser2scorenum dw 1742h
 counteruser2sizescorenum db 0
 user2scorenum db  '0','$'
 user2sizescorenum db $-User2scorenum-1
+counteruser2sizepower db 0
+user2power  db 'powers','$'
+user2sizepower db $-User2power-1
+puser2power dw 1548h
+
+xuser2power dw 265
+yuser2power dw 185
+sizeuser2box equ 6
+
+xuser2rocket dw 290
+yuser2rocket dw 183
 
 ;---------------------------PATHDATA---------------------------
 
@@ -381,6 +408,11 @@ car1image DB 39, 39, 39, 39, 39, 39, 20, 39, 20, 39, 16, 16, 39, 16, 16, 16
 car2image DB 9, 9, 9, 9, 9, 9, 20, 9, 20, 9, 16, 16, 9, 16, 16, 16, 16
           DB 9, 16, 16, 20, 9, 16, 9, 20, 20, 9, 16, 9, 20, 20, 9, 16, 9
           DB 20, 20, 9, 9, 9, 20, 16, 16, 9, 16, 16, 16, 16, 9, 16, 16, 9, 9, 9, 9, 9
+
+
+rocketimg DB 0, 16, 186, 186, 16, 0, 0, 16, 185, 113, 16, 0, 0, 16, 23, 23, 16, 0, 0, 16
+          DB 23, 23, 16, 0, 16, 19, 23, 23, 19, 16, 16, 16, 23, 23, 16, 16, 0, 40, 6, 6 
+          DB 40, 0, 0, 40, 42, 42, 40, 0, 0, 0, 40, 40, 0, 0
 
 
 ; OLD  <  center of car a  > and position
@@ -4399,7 +4431,7 @@ clearuser1car proc
     mov cl,0
     mov ch,0
     labeluser1clr2:
-    cmp ch,11
+    cmp ch,car_height
     je labeluser1clr3
     mov es:[di],al
     cmp cl,car_width-1
@@ -4418,7 +4450,7 @@ clearuser1car proc
     mov cl,0
     mov ch,0
     labeluser1clr4:
-    cmp ch,11
+    cmp ch,car_height
     je labeluser1clr3
     mov es:[di],al
     cmp cl,car_width-1
@@ -4443,7 +4475,7 @@ showuser1carupdown PROC
     sub di,(car_width / 2) + 320 * (car_height / 2)
     lea si,car1image
     cld
-    cmp posita,'s'
+    cmp user1posita,'s'
     jne labelshowuser1cardown1
     std
     add si,car_width * car_height - 1
@@ -4452,7 +4484,7 @@ showuser1carupdown PROC
     labelshowuser1carup1:                 
     mov cx,1
     rep movsb
-    cmp posita,'s'
+    cmp user1posita,'s'
     jne labelshowuser1cardown2
     add di,2
     labelshowuser1cardown2:
@@ -4475,7 +4507,7 @@ showuser1carrightleft PROC
     sub di,(car_width / 2) * 320 - car_height / 2
     cld
     lea si,car1image
-    cmp posita,'d'
+    cmp user1posita,'d'
     je labeluser1carleft1
     std
     add si,car_height * car_width - 1
@@ -4484,7 +4516,7 @@ showuser1carrightleft PROC
     labeluser1carright1: 
     mov cx,1                
     rep movsb
-    cmp posita,'d'
+    cmp user1posita,'d'
     je labeluser1carleft2
     add di,321d
     jmp labeluser1carleft3
@@ -4516,7 +4548,7 @@ clearuser2car proc
     mov cl,0
     mov ch,0
     labeluser2clr2:
-    cmp ch,11
+    cmp ch,car_height
     je labeluser2clr3
     mov es:[di],al
     cmp cl,car_width-1
@@ -4535,7 +4567,7 @@ clearuser2car proc
     mov cl,0
     mov ch,0
     labeluser2clr4:
-    cmp ch,11
+    cmp ch,car_height
     je labeluser2clr3
     mov es:[di],al
     cmp cl,car_width-1
@@ -4560,7 +4592,7 @@ showuser2carupdown PROC
     sub di,(car_width / 2) + 320 * (car_height / 2)
     lea si,car2image
     cld
-    cmp positb,'s'
+    cmp user2positb,'s'
     jne labelshowuser2cardown1
     std
     add si,car_width * car_height - 1
@@ -4569,7 +4601,7 @@ showuser2carupdown PROC
     labelshowuser2carup1:                 
     mov cx,1
     rep movsb
-    cmp positb,'s'
+    cmp user2positb,'s'
     jne labelshowuser2cardown2
     add di,2
     labelshowuser2cardown2:
@@ -4592,7 +4624,7 @@ showuser2carrightleft PROC
     sub di,(car_width / 2) * 320 - car_height / 2
     cld
     lea si,car2image
-    cmp positb,'d'
+    cmp user2positb,'d'
     je labeluser2carleft1
     std
     add si,car_height * car_width - 1
@@ -4601,7 +4633,7 @@ showuser2carrightleft PROC
     labeluser2carright1: 
     mov cx,1                
     rep movsb
-    cmp positb,'d'
+    cmp user2positb,'d'
     je labeluser2carleft2
     add di,321d
     jmp labeluser2carleft3
@@ -4619,7 +4651,302 @@ showuser2carrightleft PROC
     ret
 showuser2carrightleft ENDP
 
+showuserscar proc
+    call clearuser1car
+    call clearuser2car
+
+    mov al,posita
+    mov user1posita,al
+    mov al,positb
+    mov user2positb,al
+
+    cmp user1posita,'d'
+    je labelshowuser1carup
+    cmp user1posita,'a'
+    je labelshowuser1carup
+    call showuser1carupdown
+    jmp labelshowuser1car
+    labelshowuser1carup:
+    call showuser1carrightleft
+    jmp labelshowuser1car
+    labelshowuser1car:
+
+    cmp user2positb,'d'
+    je labelshowuser2carup
+    cmp user2positb,'a'
+    je labelshowuser2carup
+    call showuser2carupdown
+    jmp labelshowuser2car
+    labelshowuser2carup:
+    call showuser2carrightleft
+    jmp labelshowuser2car
+    labelshowuser2car:
+    ret
+showuserscar endp
+
 ;--------------------endshowuserscars-------------------------
+
+
+
+clearuserspowers proc
+    mov ax,320
+    mul yuser1power
+    add ax,xuser1power
+    mov di,ax
+    mov cl,sizeuser1box
+    mov ch,sizeuser1box
+    mov al,0fh
+    label1clearuserspowers:
+    mov es:[di],al
+    inc di
+    dec cl
+    cmp cl,0
+    jne label1clearuserspowers
+    dec ch
+    mov cl,sizeuser1box
+    add di,320-sizeuser1box
+    cmp ch,0
+    jne label1clearuserspowers
+    mov ax,320
+    mul yuser2power
+    add ax,xuser2power
+    mov di,ax
+    mov cl,sizeuser2box
+    mov ch,sizeuser2box
+    mov al,0fh
+    label2clearuserspowers:
+    mov es:[di],al
+    inc di
+    dec cl
+    cmp cl,0
+    jne label2clearuserspowers
+    dec ch
+    mov cl,sizeuser2box
+    add di,320-sizeuser2box
+    cmp ch,0
+    jne label2clearuserspowers
+    ret
+clearuserspowers endp
+
+
+drawuser1power proc
+    push ax
+    mov ax,320
+    mul yuser1power
+    add ax,xuser1power
+    mov di,ax
+    mov cl,sizeuser1box
+    mov ch,sizeuser1box
+    pop ax
+    label3clearuserspowers:
+    mov es:[di],al
+    inc di
+    dec cl
+    cmp cl,0
+    jne label3clearuserspowers
+    dec ch
+    mov cl,sizeuser1box
+    add di,320-sizeuser1box
+    cmp ch,0
+    jne label3clearuserspowers
+    ret
+drawuser1power endp
+
+
+drawuser2power proc
+    push ax
+    mov ax,320
+    mul yuser2power
+    add ax,xuser2power
+    mov di,ax
+    mov cl,sizeuser2box
+    mov ch,sizeuser2box
+    pop ax
+    label4clearuserspowers:
+    mov es:[di],al
+    inc di
+    dec cl
+    cmp cl,0
+    jne label4clearuserspowers
+    dec ch
+    mov cl,sizeuser2box
+    add di,320-sizeuser2box
+    cmp ch,0
+    jne label4clearuserspowers
+    ret
+drawuser2power endp
+
+
+showuserspower proc
+    call clearuserspowers
+
+    cmp obstacleA,1
+    jne contshowpower1
+    mov ah,0
+    mov al,placeWall
+    call drawuser1power
+    jmp finishshowuser1power
+    contshowpower1:
+    cmp HaveSpeedA,1
+    jne contshowpower2
+    mov ah,0
+    mov al,speedPower
+    call drawuser1power
+    jmp finishshowuser1power
+    contshowpower2:
+    cmp HaveDelayA,1
+    jne contshowpower3
+    mov ah,0
+    mov al,slowDownPower
+    call drawuser1power
+    jmp finishshowuser1power
+    contshowpower3:
+    cmp HavePassA,1
+    jne finishshowuser1power
+    mov ah,0
+    mov al,passWall
+    call drawuser1power
+
+    finishshowuser1power:
+
+    cmp obstacleB,1
+    jne contshowpower4
+    mov ah,0
+    mov al,placeWall
+    call drawuser2power
+    jmp finishshowuser2power
+    contshowpower4:
+    cmp HaveSpeedB,1
+    jne contshowpower5
+    mov ah,0
+    mov al,speedPower
+    call drawuser2power
+    jmp finishshowuser2power
+    contshowpower5:
+    cmp HaveDelayB,1
+    jne contshowpower6
+    mov ah,0
+    mov al,slowDownPower
+    call drawuser2power
+    jmp finishshowuser2power
+    contshowpower6:
+    cmp HavePassB,1
+    jne finishshowuser2power
+    mov ah,0
+    mov al,passWall
+    call drawuser2power
+
+    finishshowuser2power:
+
+    ret
+showuserspower endp
+
+
+clearusersrockets proc
+    mov ax,320
+    mul yuser1rocket
+    add ax,xuser1rocket
+    mov di,ax
+    mov cl,weidthimgrocket
+    mov ch,heigthimgrocket
+    mov al,00h
+    label1clearusersrocket:
+    mov es:[di],al
+    inc di
+    dec cl
+    cmp cl,0
+    jne label1clearusersrocket
+    dec ch
+    mov cl,weidthimgrocket
+    add di,320-weidthimgrocket
+    cmp ch,0
+    jne label1clearusersrocket
+    mov ax,320
+    mul yuser2rocket
+    add ax,xuser2rocket
+    mov di,ax
+    mov cl,weidthimgrocket
+    mov ch,heigthimgrocket
+    mov al,00h
+    label2clearusersrocket:
+    mov es:[di],al
+    inc di
+    dec cl
+    cmp cl,0
+    jne label2clearusersrocket
+    dec ch
+    mov cl,weidthimgrocket
+    add di,320-weidthimgrocket
+    cmp ch,0
+    jne label2clearusersrocket
+    ret
+clearusersrockets endp
+
+
+drawuser1rocket proc
+    mov ax,320
+    mul yuser1rocket
+    add ax,xuser1rocket
+    mov di,ax
+    mov cl,weidthimgrocket
+    mov ch,heigthimgrocket
+    cld
+    lea si,rocketimg
+    label3clearusersrocket:
+    movsb
+    dec cl
+    cmp cl,0
+    jne label3clearusersrocket
+    dec ch
+    mov cl,weidthimgrocket
+    add di,320-weidthimgrocket
+    cmp ch,0
+    jne label3clearusersrocket
+    ret
+drawuser1rocket endp
+
+
+drawuser2rocket proc
+    mov ax,320
+    mul yuser2rocket
+    add ax,xuser2rocket
+    mov di,ax
+    mov cl,weidthimgrocket
+    mov ch,heigthimgrocket
+    cld
+    lea si,rocketimg
+    label4clearusersrocket:
+    movsb
+    dec cl
+    cmp cl,0
+    jne label4clearusersrocket
+    dec ch
+    mov cl,weidthimgrocket
+    add di,320-weidthimgrocket
+    cmp ch,0
+    jne label4clearusersrocket
+    ret
+drawuser2rocket endp
+
+
+checkusersrocket proc 
+    call clearusersrockets
+
+    cmp firecara,1
+    jne labelnorocket1
+    call drawuser1rocket
+    labelnorocket1:
+
+    cmp firecarb,1
+    jne finishusersrocket
+    call drawuser2rocket
+
+    finishusersrocket:
+
+    ret
+checkusersrocket endp
+
+;--------------------endshowuserspowers------------------------
 
 
 moveCars PROC
@@ -4687,35 +5014,10 @@ moveCars PROC
     call ActivateDelay
     Call ActivatePass
 
-    call clearuser1car
-    call clearuser2car
 
-    mov al,posita
-    mov user1posita,al
-    mov al,positb
-    mov user2positb,al
-
-    cmp posita,'d'
-    je labelshowuser1carup
-    cmp posita,'a'
-    je labelshowuser1carup
-    call showuser1carupdown
-    jmp labelshowuser1car
-    labelshowuser1carup:
-    call showuser1carrightleft
-    jmp labelshowuser1car
-    labelshowuser1car:
-
-    cmp positb,'d'
-    je labelshowuser2carup
-    cmp positb,'a'
-    je labelshowuser2carup
-    call showuser2carupdown
-    jmp labelshowuser2car
-    labelshowuser2carup:
-    call showuser2carrightleft
-    jmp labelshowuser2car
-    labelshowuser2car:
+    call showuserscar
+    call showuserspower
+    call checkusersrocket
 
     cmp [byte ptr keylist + KeyEsc],1
     je finishmovecars
@@ -4738,16 +5040,35 @@ showusername proc
     inc di
     loop labelhorizontalline
 
+    mov ah, 0
+    mov al, user1size
+    add xuser1car, ax
+    mov al, user2size
+    add xuser2car, ax
+
     showusermacro puser1name,colorcara,counteruser1size,user1size,User1Name
     showusermacro puser2name,colorcarb,counteruser2size,user2size,User2Name
     ;----------------------------user1-info-------------------------------------
     showusermacro puser1score,colorcara,counteruser1sizescore,user1sizescore,user1score
     showusermacro puser1scorenum,colorcara,counteruser1sizescorenum,user1sizescorenum,user1scorenum
+    showusermacro puser1power,user1color,counteruser1sizepower,user1sizepower,user1power
 
     ;----------------------------user2-info-------------------------------------
     showusermacro puser2score,colorcarb,counteruser2sizescore,user2sizescore,user2score
     showusermacro puser2scorenum,colorcarb,counteruser2sizescorenum,user2sizescorenum,user2scorenum
+    showusermacro puser2power,user2color,counteruser2sizepower,user2sizepower,user2power
 
+    mov ax,320
+    mov cx,verticalScreen
+    mul cx
+    mov di,ax
+    add di, 155
+    mov cx,40
+    mov al,0eh
+    labelverticalline:
+    mov es:[di],al
+    add di, 320
+    loop labelverticalline
     ret
 showusername endp
 
