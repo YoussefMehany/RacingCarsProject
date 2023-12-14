@@ -209,72 +209,70 @@ endm showusermacro
 
 .DATA
 
+chatmargin equ 17
+chatmarginhex equ 0200h 
+
+
 colorcara db 39
 colorcarb db 9
 ;---------------------------usersdata--------------------------
 
-weidthimgrocket equ 6
-heigthimgrocket equ 9
+widthimgrocket equ 6
+heightimgrocket equ 9
 
 ;---------------------------user1data--------------------------
 
-puser1name dw 1501h
+puser1name dw 1301h
 counteruser1size db 0
-User1Name db "yoyo",'$'
+User1Name db "Youssef Tarek",'$'
 user1size db $-User1Name-1
 User1color db 39
-xuser1car  dw 68
+xuser1car  dw 73
 yuser1car  dw 171
 user1posita db 'w'
-puser1score dw 1701h
+puser1score dw 1501h
 counteruser1sizescore db 0
 user1score  db 'score:','$'
 user1sizescore db $-User1score-1
-puser1scorenum dw 1707h
+puser1scorenum dw 1507h
 counteruser1sizescorenum db 0
 user1scorenum db  '0','$'
 user1sizescorenum db $-User1scorenum-1
-counteruser1sizepower db 0
-user1power  db 'powers','$'
-user1sizepower db $-User1power-1
-puser1power dw 150dh
 
-xuser1power dw 135
-yuser1power dw 185
+
+xuser1power dw 110 ;135
+yuser1power dw 169
 sizeuser1box equ 6
 
-xuser1rocket dw 110
-yuser1rocket dw 183
+xuser1rocket dw 135 ;110
+yuser1rocket dw 168
 
 ;---------------------------user2data--------------------------
 
-puser2name dw 153ch
+puser2name dw 133ch
 counteruser2size db 0
-User2Name db "memo",'$'
+User2Name db "Mina Hany",'$'
 user2size db $-User2Name-1
 User2color db 9
-xuser2car  dw 220
-yuser2car  dw 172
+xuser2car  dw 225
+yuser2car  dw 171
 user2positb db 'w'
-puser2score dw 173ch
+puser2score dw 153ch
 counteruser2sizescore db 0
 user2score  db 'score:','$'
 user2sizescore db $-User2score-1
-puser2scorenum dw 1742h
+puser2scorenum dw 1542h
 counteruser2sizescorenum db 0
 user2scorenum db  '0','$'
 user2sizescorenum db $-User2scorenum-1
-counteruser2sizepower db 0
-user2power  db 'powers','$'
-user2sizepower db $-User2power-1
-puser2power dw 1548h
+
 
 xuser2power dw 265
-yuser2power dw 185
+yuser2power dw 169
 sizeuser2box equ 6
 
 xuser2rocket dw 290
-yuser2rocket dw 183
+yuser2rocket dw 168
 
 ;---------------------------PATHDATA---------------------------
 
@@ -283,7 +281,7 @@ pathCount equ 80d
 trackWidth equ 16d
 streetLength equ 10d
 finishLength equ 6d
-alternatingFinish equ 2d
+alternatingFinish equ 3d
 verticalScreen equ 160d
 horizontalScreen equ 320d
 smallmargin equ 5d
@@ -564,7 +562,13 @@ bgimg DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 1
  DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
  DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
  
- 
+;-----------------------------------------gameEnded-------------------------------------------------
+user1Won db 'Player1 Won$'
+user2Won db 'Player2 Won$'
+gamedraw db 'Both Players Lost$'
+finishM db ?
+finishS db ?
+winningState db 0 ;0 -> game continues, 1 -> u1 won, 2 -> u2 won, 3 -> draw (both lost), 4 -> pause
 
 .CODE
 
@@ -4686,7 +4690,35 @@ showuserscar endp
 
 ;--------------------endshowuserscars-------------------------
 
+;gets the system in minutes
+getfinishsystime PROC
+    mov ah, 2CH
+    int 21h
+    mov finishS, dh
+    mov al, cl
+    add al, 2
+    mov finishM, 60d
+    mov ah, 0
+    div finishM
+    mov finishM, ah
+    ret
+getfinishsystime ENDP
 
+checkGameFinish PROC
+    mov ah, 2CH
+    int 21h
+    cmp cl, finishM
+    jz equalMinutes
+    jmp FinishGameEndingCheck
+    equalMinutes:
+    cmp dh, finishS
+    jz gameFinishesInDraw
+    jmp FinishGameEndingCheck
+    gameFinishesInDraw:
+    mov WinningState, 3
+    FinishGameEndingCheck:
+    ret
+checkGameFinish ENDP
 
 clearuserspowers proc
     mov ax,320
@@ -4847,8 +4879,8 @@ clearusersrockets proc
     mul yuser1rocket
     add ax,xuser1rocket
     mov di,ax
-    mov cl,weidthimgrocket
-    mov ch,heigthimgrocket
+    mov cl,widthimgrocket
+    mov ch,heightimgrocket
     mov al,00h
     label1clearusersrocket:
     mov es:[di],al
@@ -4857,16 +4889,16 @@ clearusersrockets proc
     cmp cl,0
     jne label1clearusersrocket
     dec ch
-    mov cl,weidthimgrocket
-    add di,320-weidthimgrocket
+    mov cl,widthimgrocket
+    add di,320-widthimgrocket
     cmp ch,0
     jne label1clearusersrocket
     mov ax,320
     mul yuser2rocket
     add ax,xuser2rocket
     mov di,ax
-    mov cl,weidthimgrocket
-    mov ch,heigthimgrocket
+    mov cl,widthimgrocket
+    mov ch,heightimgrocket
     mov al,00h
     label2clearusersrocket:
     mov es:[di],al
@@ -4875,8 +4907,8 @@ clearusersrockets proc
     cmp cl,0
     jne label2clearusersrocket
     dec ch
-    mov cl,weidthimgrocket
-    add di,320-weidthimgrocket
+    mov cl,widthimgrocket
+    add di,320-widthimgrocket
     cmp ch,0
     jne label2clearusersrocket
     ret
@@ -4888,8 +4920,8 @@ drawuser1rocket proc
     mul yuser1rocket
     add ax,xuser1rocket
     mov di,ax
-    mov cl,weidthimgrocket
-    mov ch,heigthimgrocket
+    mov cl,widthimgrocket
+    mov ch,heightimgrocket
     cld
     lea si,rocketimg
     label3clearusersrocket:
@@ -4898,8 +4930,8 @@ drawuser1rocket proc
     cmp cl,0
     jne label3clearusersrocket
     dec ch
-    mov cl,weidthimgrocket
-    add di,320-weidthimgrocket
+    mov cl,widthimgrocket
+    add di,320-widthimgrocket
     cmp ch,0
     jne label3clearusersrocket
     ret
@@ -4911,8 +4943,8 @@ drawuser2rocket proc
     mul yuser2rocket
     add ax,xuser2rocket
     mov di,ax
-    mov cl,weidthimgrocket
-    mov ch,heigthimgrocket
+    mov cl,widthimgrocket
+    mov ch,heightimgrocket
     cld
     lea si,rocketimg
     label4clearusersrocket:
@@ -4921,8 +4953,8 @@ drawuser2rocket proc
     cmp cl,0
     jne label4clearusersrocket
     dec ch
-    mov cl,weidthimgrocket
-    add di,320-weidthimgrocket
+    mov cl,widthimgrocket
+    add di,320-widthimgrocket
     cmp ch,0
     jne label4clearusersrocket
     ret
@@ -4948,6 +4980,41 @@ checkusersrocket endp
 
 ;--------------------endshowuserspowers------------------------
 
+handleGameEnd PROC
+
+    call clearScreen
+
+    ;Set cursor position
+    mov ah, 2       ; Subfunction: Set cursor position
+    mov bh, 0       ; Video page number
+    mov dh, 12   ; Row (vertical position)
+    mov dl, 30   ; Column (horizontal position)
+    int 10h
+
+    ; Display the string
+    mov ah, 09h     ; Function: Display string
+    cmp WinningState, 3
+    jz DrawMsg
+    jmp nextMsg1
+    DrawMsg:
+    lea dx, [gamedraw]   ; Load effective address of the string into dx
+    nextMsg1:
+    cmp WinningState, 1
+    jz P1WonMsg
+    jmp nextMsg2
+    P1WonMsg:
+    lea dx, [user1Won]   
+    nextMsg2:
+    cmp WinningState, 2
+    jz P2WonMsg
+    jmp displayEndingMessage
+    P2WonMsg:
+    lea dx, [user2Won]
+    displayEndingMessage:   
+    int 21h
+
+    ret
+handleGameEnd ENDP
 
 moveCars PROC
     drawinitcar xa,ya,car1image   ; car a
@@ -4963,6 +5030,11 @@ moveCars PROC
     mov RepeatTime,ah
 
     lop:
+    call CheckGameFinish
+    cmp WinningState, 0
+    jz gameContinues
+    jmp finishmoveCars
+    gameContinues:
     call sleepSomeTime
     mov ah,2ch   
     int 21h
@@ -5019,16 +5091,29 @@ moveCars PROC
     call showuserspower
     call checkusersrocket
 
-    cmp [byte ptr keylist + KeyEsc],1
-    je finishmovecars
     jmp lop
-    finishmovecars:
-    call clearscreen ; (change)
+    finishmoveCars:
+    call handleGameEnd
     ret
 moveCars ENDP
 
 
 showusername proc
+    
+    add yuser1car, chatmargin
+    add yuser1power, chatmargin
+    add yuser1rocket, chatmargin
+    add puser1score, chatmarginhex
+    add puser1name, chatmarginhex
+    add puser1scorenum, chatmarginhex
+
+    add yuser2car, chatmargin
+    add yuser2power, chatmargin
+    add yuser2rocket, chatmargin
+    add puser2score, chatmarginhex
+    add puser2name, chatmarginhex
+    add puser2scorenum, chatmarginhex
+
     mov ax,320
     mov cx,verticalScreen
     mul cx
@@ -5051,12 +5136,10 @@ showusername proc
     ;----------------------------user1-info-------------------------------------
     showusermacro puser1score,colorcara,counteruser1sizescore,user1sizescore,user1score
     showusermacro puser1scorenum,colorcara,counteruser1sizescorenum,user1sizescorenum,user1scorenum
-    showusermacro puser1power,user1color,counteruser1sizepower,user1sizepower,user1power
 
     ;----------------------------user2-info-------------------------------------
     showusermacro puser2score,colorcarb,counteruser2sizescore,user2sizescore,user2score
     showusermacro puser2scorenum,colorcarb,counteruser2sizescorenum,user2sizescorenum,user2scorenum
-    showusermacro puser2power,user2color,counteruser2sizepower,user2sizepower,user2power
 
     mov ax,320
     mov cx,verticalScreen
@@ -5090,10 +5173,9 @@ MAIN PROC FAR
     call drawPath
     mov dontDraw, 1
     call drawPath
-    
+    call getfinishsystime
 
     call moveCars
-
 
     ;terminate 
     mov ah, 4CH
