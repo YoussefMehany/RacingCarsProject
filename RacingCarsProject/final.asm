@@ -202,12 +202,39 @@ showusermacro macro pos,c,counternamesize,namesize,username
     jne labelshowuName
 endm showusermacro
 
+ShowMessage MACRO MyMessage
+    mov ah,9
+    mov dx,offset MyMessage
+    int 21h
+ENDM ShowMessage
+
+ChangeCursor MACRO XParm,YParm
+    mov ah,2
+    mov dl,XParm
+    mov dh,YParm
+    int 10h
+ENDM ChangeCursor
+
 .286
 .MODEL large
 .STACK 128
 
 
 .DATA
+
+;--------------------------mainMenu----------------------------------
+UsernameInit1 db 16,?
+UserName1 db 16 dup('$') ;Username1
+UsernameInit2 db 16,?
+UserName2 db 16 dup('$') ;Username2
+EnterKey db 10,13,'$' 
+NamePrompt1 db "Please Enter First name:",'$'
+NamePrompt2 db "Please Enter Second name:",'$'
+EnterPrompt db "Press Enter key to continue",'$'
+ChatPrompt db "To start chatting press F1",'$'
+GamePrompt db "To start the game press F2",'$'
+EndPrompt db "To end the program press ESC",'$'
+Notif db 80 dup('-'),'$'
 
 chatmargin equ 17
 chatmarginhex equ 0200h 
@@ -222,10 +249,9 @@ heightimgrocket equ 9
 
 ;---------------------------user1data--------------------------
 
-puser1name dw 1301h
+pUserName1 dw 1301h
 counteruser1size db 0
-User1Name db "Youssef Tarek",'$'
-user1size db $-User1Name-1
+user1size db ?
 User1color db 39
 xuser1car  dw 73
 yuser1car  dw 171
@@ -249,10 +275,9 @@ yuser1rocket dw 168
 
 ;---------------------------user2data--------------------------
 
-puser2name dw 133ch
+pUserName2 dw 133ch
 counteruser2size db 0
-User2Name db "Mina Hany",'$'
-user2size db $-User2Name-1
+user2size db ?
 User2color db 9
 xuser2car  dw 225
 yuser2car  dw 171
@@ -568,7 +593,7 @@ user2Won db 'Player2 Won$'
 gamedraw db 'Both Players Lost$'
 finishM db ?
 finishS db ?
-winningState db 0 ;0 -> game continues, 1 -> u1 won, 2 -> u2 won, 3 -> draw (both lost), 4 -> pause
+winningState db 0 ;0 -> game continues, 1 -> u1 won, 2 -> u2 won, 3 -> draw (both lost)
 
 .CODE
 
@@ -4978,7 +5003,71 @@ checkusersrocket proc
     ret
 checkusersrocket endp
 
+
 ;--------------------endshowuserspowers------------------------
+
+ExitProgram proc
+    call clearScreen
+    mov ah,4Ch
+    int 21h
+    ret
+ExitProgram ENDP
+
+mainMenu PROC
+    call clearScreen
+    ChangeCursor 25,6
+    ShowMessage ChatPrompt
+    ChangeCursor 25,10
+    ShowMessage GamePrompt
+    ChangeCursor 25,14
+    ShowMessage EndPrompt
+    ChangeCursor 0,21
+    ShowMessage Notif
+    MAINWAITFORKEY:
+    mov ah,0
+    int 16h
+    mov bh,3Ch
+    CMP AH,bh
+    JE  Game
+    mov bh,3Bh
+    CMP ah,bh
+    JE  MAINWAITFORKEY
+    mov bh,01h
+    CMP ah,bh
+    JE  Exit
+    JMP MAINWAITFORKEY
+
+    Exit:
+        Call ExitProgram
+    Game:
+    ret
+mainMenu ENDP
+
+takeUserInput PROC
+    call clearScreen
+    ShowMessage NamePrompt1
+    ShowMessage Enterkey
+    mov ah,0Ah
+    mov dx,offset UsernameInit1
+    int 21h
+    ShowMessage Enterkey
+    ShowMessage NamePrompt2
+    ShowMessage Enterkey
+    mov ah,0Ah
+    mov dx,offset UsernameInit2
+    int 21h
+    ShowMessage Enterkey
+    ShowMessage EnterPrompt
+    WaitforEnter:
+    mov ah,0
+    int 16h
+    mov bl,0Dh
+    cmp al,bl
+    je  continueInput
+    jmp WaitforEnter
+    continueInput:
+    ret
+takeUserInput ENDP
 
 handleGameEnd PROC
 
@@ -5097,21 +5186,24 @@ moveCars PROC
     ret
 moveCars ENDP
 
-
 showusername proc
-    
+    mov al, [usernameInit1 + 1]
+    mov user1size, al
+    mov al, [usernameInit2 + 1]
+    mov user2size, al
+
     add yuser1car, chatmargin
     add yuser1power, chatmargin
     add yuser1rocket, chatmargin
     add puser1score, chatmarginhex
-    add puser1name, chatmarginhex
+    add pUserName1, chatmarginhex
     add puser1scorenum, chatmarginhex
 
     add yuser2car, chatmargin
     add yuser2power, chatmargin
     add yuser2rocket, chatmargin
     add puser2score, chatmarginhex
-    add puser2name, chatmarginhex
+    add pUserName2, chatmarginhex
     add puser2scorenum, chatmarginhex
 
     mov ax,320
@@ -5131,8 +5223,8 @@ showusername proc
     mov al, user2size
     add xuser2car, ax
 
-    showusermacro puser1name,colorcara,counteruser1size,user1size,User1Name
-    showusermacro puser2name,colorcarb,counteruser2size,user2size,User2Name
+    showusermacro pUserName1,colorcara,counteruser1size,user1size,UserName1
+    showusermacro pUserName2,colorcarb,counteruser2size,user2size,UserName2
     ;----------------------------user1-info-------------------------------------
     showusermacro puser1score,colorcara,counteruser1sizescore,user1sizescore,user1score
     showusermacro puser1scorenum,colorcara,counteruser1sizescorenum,user1sizescorenum,user1scorenum
@@ -5162,6 +5254,9 @@ MAIN PROC FAR
     mov ds, ax
     mov ax, 0A000h
     mov es,ax
+
+    call takeUserInput
+    call MainMenu
 
     call overrideInt
 
