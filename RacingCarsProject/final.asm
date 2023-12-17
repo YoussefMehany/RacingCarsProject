@@ -114,6 +114,7 @@ drawBox macro x,y,c,s
     mov di,ax
     mov bx,2
     mov ax,s
+    xor dx, dx
     div bx
     mov bx,ax
     mov ax,320
@@ -145,6 +146,7 @@ checkSmallBoxColor macro x,y,c,s,chkr
     mov si,ax
     mov bx,2
     mov ax,s
+    xor dx, dx
     div bx
     mov bx,ax
     mov ax,320
@@ -178,6 +180,7 @@ showusermacro macro pos,c,counternamesize,namesize,username
     local labelshowuName
     mov ah,2
     mov dx,pos
+    mov bh, 0
     int 10h
 
     mov counternamesize,0
@@ -215,12 +218,66 @@ ChangeCursor MACRO XParm,YParm
     int 10h
 ENDM ChangeCursor
 
+convertnumtostr macro str
+    local l1
+    local l2
+    local finishshownum
+     lea bx, str
+     mov cx,10
+     mov dx, 2
+     l1:
+       push dx
+       mov dx,0
+       div cx
+       add dl,30h
+       mov [bx],dl
+       inc bx 
+       pop dx
+       dec dx
+       cmp dx,0
+     jnz l1
+
+     
+     mov cx, bx
+     lea dx,str
+     sub cx,dx
+     dec bx
+     lea di, str
+     l2:
+         mov dl,[bx]
+         mov dh, [di]
+         mov [bx], dh
+         mov [di], dl
+         dec bx
+         inc di
+         
+     dec cx
+     jz finishshownum
+     loop l2
+     finishshownum:
+     
+endm convertnumtostr
+
+minmaxnum macro num1, num2
+    local finishminmax, xchange
+    mov ax, num1
+    cmp ax, num2
+    jae xchange
+    jmp finishminmax
+    xchange:
+    xchg ax, num2
+    mov num1, ax
+    finishminmax:
+    mov ax, num1
+    mov bx, num2
+endm minmaxnum
+
 .286
 .MODEL large
 .STACK 128
 
-
 .DATA
+
 
 ;--------------------------mainMenu----------------------------------
 UsernameInit1 db 16,?
@@ -232,9 +289,17 @@ NamePrompt1 db "Please Enter First name:",'$'
 NamePrompt2 db "Please Enter Second name:",'$'
 EnterPrompt db "Press Enter key to continue",'$'
 ChatPrompt db "To start chatting press F1",'$'
+counterChatPrompt db 0
+sizeChatPrompt db 26
 GamePrompt db "To start the game press F2",'$'
+counterGamePrompt db 0
+sizeGamePrompt db 26
 EndPrompt db "To end the program press ESC",'$'
-Notif db 80 dup('-'),'$'
+counterEndPrompt db 0
+sizeEndPrompt db 28
+Notif db 40 dup('-'),'$'
+counterNotif db 0
+sizeNotif db 40
 
 chatmargin equ 17
 chatmarginhex equ 0200h 
@@ -253,21 +318,23 @@ pUserName1 dw 1301h
 counteruser1size db 0
 user1size db ?
 User1color db 39
-xuser1car  dw 73
-yuser1car  dw 171
+xuser1car  dw 90
+yuser1car  dw 170
 user1posita db 'w'
 puser1score dw 1501h
 counteruser1sizescore db 0
 user1score  db 'score:','$'
-user1sizescore db $-User1score-1
+user1sizescore db 6
 puser1scorenum dw 1507h
 counteruser1sizescorenum db 0
-user1scorenum db  '0','$'
-user1sizescorenum db $-User1scorenum-1
+user1scorenumstr db 4 dup(?)
+
+user1sizescorenum db 3
+user1scorenum db 0
 
 
 xuser1power dw 110 ;135
-yuser1power dw 169
+yuser1power dw 168
 sizeuser1box equ 6
 
 xuser1rocket dw 135 ;110
@@ -279,17 +346,19 @@ pUserName2 dw 133ch
 counteruser2size db 0
 user2size db ?
 User2color db 9
-xuser2car  dw 225
+xuser2car  dw 243
 yuser2car  dw 171
 user2positb db 'w'
 puser2score dw 153ch
 counteruser2sizescore db 0
 user2score  db 'score:','$'
-user2sizescore db $-User2score-1
+user2sizescore db 6
 puser2scorenum dw 1542h
 counteruser2sizescorenum db 0
-user2scorenum db  '0','$'
-user2sizescorenum db $-User2scorenum-1
+user2scorenumstr db 4 dup(?)
+
+user2sizescorenum db 3
+user2scorenum db 0
 
 
 xuser2power dw 265
@@ -338,6 +407,9 @@ curStRow dw ?
 curEnCol dw ?
 curEnRow dw ?
 
+num1 dw ?
+num2 dw ?
+
 minx dw ?
 maxx dw ?
 miny dw ?
@@ -371,11 +443,19 @@ secondLineCounter dw 0
 
 ;path array
 curIdx dw 0
-savedDirections dw pathsize dup(?)
+startIdx dw 0
+startIdxa dw 0
+startIdxb dw 0
+
+savedDirections dw pathcount dup(?)
 pathLine1_X dw pathsize dup(?)
 pathLine1_Y dw pathsize dup(?)
 pathLine2_X dw pathsize dup(?)
 pathLine2_Y dw pathsize dup(?)
+pathStart1_X dw pathcount dup(?)
+pathStart1_Y dw pathcount dup(?)
+pathStart2_X dw pathcount dup(?)
+pathStart2_Y dw pathcount dup(?)
 pathFreq db 8192 dup(0) ;8k frequency array path
 
 
@@ -410,6 +490,12 @@ cBox db ?
 sBox dw ?
 sBoxBigger dw ?
 
+nextLinea dw ?
+passedChecka db ?
+reverseA dw ?
+nextLineb dw ?
+passedCheckb db ?
+reverseb dw ?
 ;---------------------CARDATA---------------
 
 car_width equ 5
@@ -449,7 +535,8 @@ velocitya dw 1
 delaycara dw 0
 
 ; <NEW>
-
+trackPosa dw 0
+trackPosb dw 0
 
 xna dw smallmargin + 5   
 yna dw verticalScreen - 5 - smallMargin   
@@ -529,7 +616,7 @@ isrocketcollision dw 0
 whatrocketcollision dw 'a'
 
 
-
+multrack dw ?
 
 
 ; <scan key of wasd>
@@ -560,31 +647,115 @@ Key3 equ 04h
 Key4 equ 05h
 
 
-KeyEsc    equ 01h
+KeyEsc equ 01h
 
-
+KeyF1 equ 3Bh
+KeyF2 equ 3Ch
+KeyF4 equ 3Eh
 
 keylist db 128 dup (0)
 
+;-------------------------------------logo----------------------------------------------
+
+
+logo DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 104, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 104, 104, 104, 104, 0, 104, 104 
+ DB 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 112 
+ DB 112, 112, 112, 112, 112, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 0, 0, 0, 104, 104, 104, 104, 0, 0, 0, 104, 104, 104, 104, 104, 0, 0, 0, 0, 0, 104, 104, 104, 0, 0, 0, 104 
+ DB 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 112 
+ DB 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 104, 0, 0, 104, 104, 104, 104, 104, 104, 0, 0, 104, 104, 104, 104, 0, 0, 0, 104, 104, 104, 104, 104, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 0, 104 
+ DB 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 112, 112, 112, 0, 0, 0, 112 
+ DB 112, 112, 112, 112, 0, 112, 112, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 104, 104, 104, 104, 104, 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 104 
+ DB 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 112, 112, 112, 0, 0, 0, 0 
+ DB 112, 112, 112, 0, 0, 0, 0, 112, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 0, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 104, 104, 104, 0, 0, 0, 0, 0, 104 
+ DB 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 112, 112, 0, 0, 0, 0 
+ DB 112, 112, 112, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 0, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 104, 104, 104, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 104 
+ DB 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 112, 112, 0, 0, 0, 0 
+ DB 112, 112, 112, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 0, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 104, 104, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 104 
+ DB 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 112, 112, 0, 0, 0, 0 
+ DB 112, 112, 112, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 0, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 104, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 104 
+ DB 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 112, 112, 0, 0, 0, 0 
+ DB 112, 112, 112, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 104, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 104 
+ DB 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 112, 112, 0, 0, 0, 0 
+ DB 112, 112, 112, 112, 112, 0, 112, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 0, 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 104, 104, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 104 
+ DB 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 112, 112, 0, 0, 0, 0 
+ DB 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 104, 104, 104, 104, 104, 104, 0, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 104, 104, 104, 104, 104, 104, 104, 104, 0, 0, 0, 0, 0, 104 
+ DB 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 112, 112, 0, 0, 0, 0 
+ DB 112, 112, 112, 112, 112, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 0, 104, 104, 104, 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 0, 104 
+ DB 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 0, 0, 0, 0, 0, 0, 112, 112, 112, 0, 0, 0, 0 
+ DB 112, 112, 112, 0, 0, 112, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 104, 104, 104, 104, 104, 0, 0, 0, 0, 104 
+ DB 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 112, 112, 112, 0, 0, 0, 112 
+ DB 112, 112, 112, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 104, 104, 104, 104, 104, 0, 0, 0, 104 
+ DB 104, 104, 104, 104, 104, 104, 104, 104, 104, 104, 0, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 0, 0, 112, 112, 112, 112, 112, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 112 
+ DB 112, 112, 112, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 0, 104, 104, 104, 0, 0, 0, 0, 0, 0, 104, 104, 104, 104, 104, 0, 0, 104 
+ DB 104, 104, 104, 104, 104, 104, 104, 104, 104, 0, 0, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 0, 0, 0, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 0, 0, 0, 0, 112 
+ DB 112, 112, 112, 0, 0, 0, 0, 112, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 104, 104, 104, 104, 0, 0, 104, 104, 104, 104, 0, 0, 0, 0, 0, 0, 104, 104, 104, 104, 104, 0, 0, 104 
+ DB 104, 104, 104, 104, 104, 104, 104, 104, 104, 0, 0, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 0, 0, 0, 0, 112, 112, 112, 112, 112, 112, 112, 112, 0, 0, 0, 0, 0, 112 
+ DB 112, 112, 112, 0, 0, 0, 0, 0, 112, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 104, 104, 104, 0, 0, 104, 104, 104, 0, 0, 0, 0, 0, 0, 0, 0, 104, 104, 0, 0, 0, 0, 104 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 112, 0, 0, 0, 0, 0, 0, 0, 112, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 112, 112, 112, 0, 0, 0, 0, 0, 112, 112, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ DB 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+ 
 ;-------------------------------------backGround------------------------------------------
 bgWidth equ 32
 bgHeight equ 20
 
-bgimg DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
- DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
- DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
- DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
- DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
- DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
- DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
- DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
- DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
- DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
- DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
- DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
- DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
- DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
- DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+bgimg DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 39, 31, 39, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 31, 192, 31, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 216, 43 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 39, 192, 192, 192, 192, 192, 192, 192, 192, 192, 216, 43, 67, 43, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 31, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 49, 49, 216, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 39, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 121, 49, 144, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 31, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 216, 122, 122, 49, 31, 49, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 216, 41, 121, 122 
+ DB 194, 216, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 216, 49, 49, 49, 49, 49, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 216, 49, 122, 122, 49, 49, 41, 49, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 122, 122, 194, 122, 122, 122, 190, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 49, 49, 31, 123, 123, 31, 49, 49, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 216, 216, 122, 49, 49, 49, 49, 49 
+ DB 122, 49, 49, 49, 216, 216, 192, 192, 192, 192, 192, 192, 192, 31, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 216, 216, 49, 122, 49, 49, 49, 49, 49, 49, 49, 216, 192, 192, 192 
+ DB 192, 192, 192, 192, 31, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 160, 160, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 128, 128, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 160, 160, 160, 160, 192, 192, 192, 192, 192, 192, 192, 192, 192, 128, 77, 77, 128, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 128, 77, 77, 128, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
+ DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 128, 128, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
  DB 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192, 192 
  
 ;-----------------------------------------gameEnded-------------------------------------------------
@@ -594,6 +765,8 @@ gamedraw db 'Both Players Lost$'
 finishM db ?
 finishS db ?
 winningState db 0 ;0 -> game continues, 1 -> u1 won, 2 -> u2 won, 3 -> draw (both lost)
+;endPrompt db ''
+endtime db ?
 
 .CODE
 
@@ -850,11 +1023,22 @@ checkmovecaraKeyUPKeyDOWN proc
     jmp clearB1
     checkwallexist1:
     cmp al,4d
-    jne therepixelnotblack1
+    jne checkwin1
     cmp ActivatePassA,1
     jne therepixelnotblack1
     mov ActivatePassA,0d
     mov TemporaryPixle,si
+    jmp clearB1
+    checkwin1:
+    cmp al,0d
+    jne checkwin12
+    mov winningState,1d
+    jmp finishcheckmovecaraKeyUPKeyDOWN
+    checkwin12:
+    cmp al,15d
+    jne therepixelnotblack1
+    mov winningState,1d
+    jmp finishcheckmovecaraKeyUPKeyDOWN
     clearB1:
     call ClearBlock
     contcheck1:
@@ -943,11 +1127,22 @@ checkmovecaraKeyRIGHTKeyLEFT proc
     jmp clearB3
     checkwallexist3:
     cmp al,4d
-    jne therepixelnotblack2
+    jne checkfinish2
     cmp ActivatePassA,1
     jne therepixelnotblack2
     mov ActivatePassA,0d
     mov TemporaryPixle,si
+    jmp clearB3
+    checkfinish2:
+    cmp al,0d
+    jne checkwin22
+    mov winningState,1d
+    jmp finishcheckmovecaraKeyRIGHTKeyLEFT
+    checkwin22:
+    cmp al,15d
+    jne therepixelnotblack2
+    mov winningState,1d
+    jmp finishcheckmovecaraKeyRIGHTKeyLEFT
     clearB3:
     call ClearBlock
     contcheck3:
@@ -1133,12 +1328,12 @@ movecarA PROC       ; check the new position of car a
     mov dl,positna                                     ; move new position to previous position 
     mov xa,ax
     mov ya,cx
-
+    ;add trackposa, 2
 
     cmp positna,'s'
     jne notKeyDOWNcarafromKeyUP
     cmp posita,'w'
-    je notKeyDOWNcarafromKeyUP                               ; if car move KeyUP then KeyDOWN  (erg3 bdhro bdl mylf )
+    je notKeyDOWNcarafromKeyUP                               ; if car move KeyUP then KeyDOWN  (reverse instead of rotate)
     mov posita,dl
     call DRAWCARAKeyUPKeyDOWN
     jmp finishmovea
@@ -1148,7 +1343,7 @@ movecarA PROC       ; check the new position of car a
     cmp positna,'w'
     jne notKeyUPcarafromKeyDOWN
     cmp posita,'s'
-    je notKeyUPcarafromKeyDOWN                                    ; if car move KeyDOWN then KeyUP  (erg3 bdhro bdl mylf )
+    je notKeyUPcarafromKeyDOWN                                    ; if car move KeyDOWN then KeyUP  (reverse instead of rotate)
     mov posita,dl
     call DRAWCARAKeyUPKeyDOWN
     jmp finishmovea
@@ -1158,7 +1353,7 @@ movecarA PROC       ; check the new position of car a
     cmp positna,'d'
     jne notKeyRIGHTcarafromKeyLEFT
     cmp posita,'a'
-    je notKeyRIGHTcarafromKeyLEFT                                 ; if car move KeyRIGHT then KeyLEFT  (erg3 bdhro bdl mylf )
+    je notKeyRIGHTcarafromKeyLEFT                                 ; if car move KeyRIGHT then KeyLEFT  (reverse instead of rotate)
     mov posita,dl
     call DRAWCARAKeyRIGHTKeyLEFT
     jmp finishmovea 
@@ -1405,11 +1600,32 @@ checkmovecarbKeyUPKeyDOWN proc
     jmp clearB
     checkwallexist:
     cmp al,4d
-    jne therepixelnotblack1carb
+    jne checkwin3
     cmp ActivatePassB,1
-    jne therepixelnotblack1carb
+    jne checkwin3
     mov ActivatePassB,0d
     mov TemporaryPixle,si
+    jmp clearB
+    checkwin3:
+    cmp al,0
+    jne checkwin32
+    cmp winningState,1
+    je draw1
+    mov winningState,2
+    jmp finishcheckmovecarbKeyUPKeyDOWN
+    draw1:
+    mov winningState,3
+    jmp finishcheckmovecarbKeyUPKeyDOWN
+    checkwin32:
+    cmp al,15
+    jne therepixelnotblack1carb
+    cmp winningState,1
+    je draw2
+    mov winningState,2
+    jmp finishcheckmovecarbKeyUPKeyDOWN
+    draw2:
+    mov winningState,3
+    jmp finishcheckmovecarbKeyUPKeyDOWN
     clearB:
     call ClearBlock
     contcheck:
@@ -1499,11 +1715,32 @@ checkmovecarbKeyRIGHTKeyLEFT proc
     jmp clearB2
     checkwallexist2:
     cmp al,4d
-    jne therepixelnotblack2carb
+    jne checkwin4
     cmp ActivatePassB,1
     jne therepixelnotblack2carb
     mov ActivatePassB,0d
     mov TemporaryPixle,si
+    jmp clearB2
+    checkwin4:
+    cmp al,0
+    jne checkwin42
+    cmp winningState,1
+    je draw3
+    mov winningState,2
+    jmp finishcheckmovecarbKeyRIGHTKeyLEFT
+    draw3:
+    mov winningState,3
+    jmp finishcheckmovecarbKeyRIGHTKeyLEFT
+    checkwin42:
+    cmp al,15
+    jne therepixelnotblack2carb
+    cmp winningState,1
+    je draw4
+    mov winningState,2
+    jmp finishcheckmovecarbKeyRIGHTKeyLEFT
+    draw4:
+    mov winningState,3
+    jmp finishcheckmovecarbKeyRIGHTKeyLEFT
     clearB2:
     call ClearBlock
     contcheck2:
@@ -2181,6 +2418,36 @@ handlekeylist proc far
   mov [byte ptr keylist + KeyEsc],0
   jmp finishhandlekeylist
   kn17:
+  cmp al,KeyF1
+  jne k18
+  mov [byte ptr keylist + KeyF1],1
+  jmp finishhandlekeylist
+  k18:
+  cmp al,KeyF1+80h
+  jne kn18
+  mov [byte ptr keylist + KeyF1],0
+  jmp finishhandlekeylist
+  kn18:
+  cmp al,KeyF2
+  jne k19
+  mov [byte ptr keylist + KeyF2],1
+  jmp finishhandlekeylist
+  k19:
+  cmp al,KeyF2+80h
+  jne kn19
+  mov [byte ptr keylist + KeyF2],0
+  jmp finishhandlekeylist
+  kn19:
+  cmp al,KeyF4
+  jne k20
+  mov [byte ptr keylist + KeyF4],1
+  jmp finishhandlekeylist
+  k20:
+  cmp al,KeyF4+80h
+  jne kn20
+  mov [byte ptr keylist + KeyF4],0
+  jmp finishhandlekeylist
+  kn20:
   cmp al,keyf
   jne krocketa
   mov [byte ptr keylist + keyf],1
@@ -2529,6 +2796,37 @@ drawBackGround PROC
     ret
 drawBackGround ENDP
 
+resetAllBits PROC
+    mov si, 0
+    fillZeros1:
+        mov cx, [pathLine1_X + si]
+        mov dx, [pathLine1_Y + si]
+        call resetBit
+        add si, 2
+        cmp si, firstLineCounter
+    jnz fillZeros1
+
+    mov di, 0
+    fillZeros2:
+        mov cx, [pathLine2_X + di]
+        mov dx, [pathLine2_Y + di]
+        call resetBit
+        add di, 2
+        cmp di, SecondLineCounter
+    jnz fillZeros2
+    ret
+resetAllBits ENDP
+
+resetEveryBit PROC
+    mov si, 0
+    mov cx, 8190
+    resetting:
+        mov [pathFreq + si], 0
+        inc si
+    Loop resetting
+    ret
+resetEveryBit ENDP
+
 finishLine PROC
     sub si, finishLength * 2
     sub di, finishLength * 2
@@ -2674,32 +2972,12 @@ finishLine PROC
         dec bx
         cmp bx, 0
         jnz innerIncRow
-    jmp finish
-
+    jmp finish 
     finish:
+    add si, finishLength * 2
+    mov [firstlinecounter], si
     ret
 finishLine ENDP
-
-resetAllBits PROC
-    mov si, 0
-    fillZeros1:
-        mov cx, [pathLine1_X + si]
-        mov dx, [pathLine1_Y + si]
-        call resetBit
-        add si, 2
-        cmp si, firstLineCounter
-    jnz fillZeros1
-
-    mov di, 0
-    fillZeros2:
-        mov cx, [pathLine2_X + di]
-        mov dx, [pathLine2_Y + di]
-        call resetBit
-        add di, 2
-        cmp di, SecondLineCounter
-    jnz fillZeros2
-    ret
-resetAllBits ENDP
 
 genRandom PROC
     xor ax, ax
@@ -2773,6 +3051,7 @@ setPowerUp PROC
     push si
     call genRandom
     mov bl, 5
+    mov ah, 0
     div bl ;ah now has the rem (where to draw the Box)
     mov al, ah
     xor ah, ah
@@ -2862,6 +3141,7 @@ checkDrawBox PROC
     mov bl, 0
     sub bl, halfBox
     add bl, trackWidth - 4
+    mov ah, 0
     div bl ;ah now has the rem (where to draw the Box)
     mov al, ah
     xor ah, ah
@@ -2970,7 +3250,6 @@ designPath PROC
     mov curIdx, 0
     mov newDirection, 0
     mov suitableStreet, 0
-
     ;start in left corner
     mov [pathLine1_X], trackWidth + smallMargin
     mov [pathLine2_X], smallMargin
@@ -3819,8 +4098,10 @@ drawPath PROC
         add curIdx, 2
         pop si
         Drawing_streetDraw:  
+
             cmp dontDraw, 1
-            jz powerUps
+            jz powerups
+            
             call delay ;to see the path getting drawn
             
             call setObs
@@ -4349,7 +4630,32 @@ drawPath PROC
                 jz dontdraw21
                 int 10h
                 dontdraw21:
-                
+                cmp dontDraw, 1
+                jz dontsaveAgain
+                cmp i, 0
+                jz startingPart
+                jmp notstartingPart
+                ;--------------now we have the 2 starting points of each trackPart-----------
+                startingPart:
+                pusha
+                sub si, 2
+                sub di, 2
+                mov ax, [pathLine1_x + si]
+                mov bx, [pathLine1_y + si]
+                mov si, startIdx
+                mov [pathStart1_x + si], ax
+                mov [pathStart1_y + si], bx
+
+                mov ax, [pathLine2_x + di]
+                mov bx, [pathLine2_y + di]
+                mov di, startIdx
+                mov [pathStart2_x + di], ax
+                mov [pathStart2_y + di], bx
+
+                add startIdx, 2
+                popa
+                notstartingpart:
+                dontsaveAgain:
                 mov cx, curDirection
                 mov prevDirection, cx
                 inc i
@@ -4713,6 +5019,38 @@ showuserscar proc
     ret
 showuserscar endp
 
+initUsernames PROC
+
+    mov si, 2
+    mov [user1scorenumstr + si],'%' 
+    mov [user2scorenumstr + si],'%' 
+
+    mov al, [usernameInit1 + 1]
+    mov user1size, al
+    mov al, [usernameInit2 + 1]
+    mov user2size, al
+
+    mov ah, 0
+    mov al, user1size
+    add xuser1car, ax
+    mov al, user2size
+    add xuser2car, ax
+
+    add yuser1car, chatmargin
+    add yuser1power, chatmargin
+    add yuser1rocket, chatmargin
+    add puser1score, chatmarginhex
+    add pUserName1, chatmarginhex
+    add puser1scorenum, chatmarginhex
+
+    add yuser2car, chatmargin
+    add yuser2power, chatmargin
+    add yuser2rocket, chatmargin
+    add puser2score, chatmarginhex
+    add pUserName2, chatmarginhex
+    add puser2scorenum, chatmarginhex
+    ret
+initUserNames ENDP
 ;--------------------endshowuserscars-------------------------
 
 ;gets the system in minutes
@@ -5003,8 +5341,311 @@ checkusersrocket proc
     ret
 checkusersrocket endp
 
+;--------------------User Scores------------------------
 
-;--------------------endshowuserspowers------------------------
+getCaraScore PROC
+    cmp reversea, 0
+    jz decstartingIdx
+    jmp leavestartingIdx
+    decstartingIdx:
+    sub startIdxa, 2
+    leaveStartingIdx:
+    mov si, startIdxa
+    mov dx, [pathStart1_x + si]
+    cmp dx, [pathStart2_x + si]
+    jz horizontalStarta
+    jmp verticalStarta
+    horizontalStarta:
+    mov di, startIdxa
+    cmp [savedDirections + di], left
+    jz changeDirHoriza
+    jmp keepDirHoriza
+    changeDirHoriza:
+    ; mov bx, 1
+    ; sub bx, nextLinea
+    ; mov nextLinea, bx
+    keepDirHoriza:
+    add dx, nextLinea
+    cmp xa, dx
+    jz carOnSamehorizDira
+    jmp finishGetScorea
+    carOnSamehorizDira:
+    mov dx, [pathStart1_y + si]
+    mov num1, dx
+    mov dx, [pathStart2_y + si]
+    mov num2, dx
+    minmaxnum num1, num2
+    ;ax has the minimum and bx has the maximum
+    cmp ya, ax
+    jae aboveminhoriza
+    jmp finishGetScorea
+    aboveminhoriza:
+    cmp ya, bx
+    jbe belowmaxhoriza
+    jmp finishGetScorea
+    belowmaxhoriza:
+    mov passedChecka, 1
+    sub startIdxa, 2
+    mov ax, reverseA
+    add startIdxa, ax
+    jmp finishGetScorea
+    verticalStarta:
+    mov dx, [pathStart1_y + si]
+    mov di, startIdxa
+    cmp [savedDirections + di], up
+    jz changeDirverta
+    jmp keepDirverta
+    changeDirverta:
+    ; mov bx, 1
+    ; sub bx, nextLinea
+    ; mov nextLinea, bx
+    keepDirverta:
+    add dx, nextLinea
+    cmp ya, dx
+    jz carOnSamevertDira
+    jmp finishGetScorea
+    carOnSamevertDira:
+    mov dx, [pathStart1_x + si]
+    mov num1, dx
+    mov dx, [pathStart2_x + si]
+    mov num2, dx
+    minmaxnum num1, num2
+    ;ax has the minimum and bx has the maximum
+    cmp xa, ax
+    jae aboveminverta
+    jmp finishGetScorea
+    aboveminverta:
+    cmp xa, bx
+    jbe belowmaxverta
+    jmp finishGetScorea
+    belowmaxverta:
+    mov passedChecka, 1
+    sub startIdxa, 2
+    mov ax, reverseA
+    add startIdxa, ax
+    ;---------------calculate precentage------------------
+
+    finishGetScorea:
+    mov ax, reverseA
+    cmp al, 0
+    jz increaseAgain
+    jmp leavestartAsIs
+    increaseAgain:
+    add startIdxa, 2
+    leavestartAsIs:
+
+    mov ax, 50
+    mul startIdxa
+
+    mov bx, pathCount
+    xor dx, dx
+    div bx
+
+    mov user1scorenum, al
+
+    ret
+getCaraScore ENDP
+
+getCarBScore PROC
+    cmp reverseB, 0
+    jz decstartingIdxb
+    jmp leavestartingIdxb
+    decstartingIdxb:
+    sub startIdxB, 2
+    leaveStartingIdxb:
+    mov si, startIdxB
+    mov dx, [pathStart1_x + si]
+    cmp dx, [pathStart2_x + si]
+    jz horizontalStartB
+    jmp verticalStartB
+    horizontalStartB:
+    mov di, startIdxB
+    cmp [savedDirections + di], left
+    jz changeDirHorizB
+    jmp keepDirHorizB
+    changeDirHorizB:
+    ; mov bx, 1
+    ; sub bx, nextLineB
+    ; mov nextLineB, bx
+    keepDirHorizB:
+    add dx, nextLineB
+    cmp xb, dx
+    jz carOnSamehorizDirB
+    jmp finishGetScoreB
+    carOnSamehorizDirB:
+    mov dx, [pathStart1_y + si]
+    mov num1, dx
+    mov dx, [pathStart2_y + si]
+    mov num2, dx
+    minmaxnum num1, num2
+    ;ax has the minimum and bx has the maximum
+    cmp yb, ax
+    jae aboveminhorizb
+    jmp finishGetScoreb
+    aboveminhorizb:
+    cmp yb, bx
+    jbe belowmaxhorizb
+    jmp finishGetScoreb
+    belowmaxhorizb:
+    mov passedCheckb, 1
+    sub startIdxb, 2
+    mov ax, reverseb
+    add startIdxb, ax
+    jmp finishGetScoreb
+    verticalStartb:
+    mov dx, [pathStart1_y + si]
+    mov di, startIdxb
+    cmp [savedDirections + di], up
+    jz changeDirvertb
+    jmp keepDirvertb
+    changeDirvertb:
+    ; mov bx, 1
+    ; sub bx, nextLineb
+    ; mov nextLineb, bx
+    keepDirvertb:
+    add dx, nextLineb
+    cmp yb, dx
+    jz carOnSamevertDirb
+    jmp finishGetScoreb
+    carOnSamevertDirb:
+    mov dx, [pathStart1_x + si]
+    mov num1, dx
+    mov dx, [pathStart2_x + si]
+    mov num2, dx
+    minmaxnum num1, num2
+    ;ax has the minimum and bx has the maximum
+    cmp xb, ax
+    jae aboveminvertb
+    jmp finishGetScoreb
+    aboveminvertb:
+    cmp xb, bx
+    jbe belowmaxvertb
+    jmp finishGetScoreb
+    belowmaxvertb:
+    mov passedCheckb, 1
+    sub startIdxb, 2
+    mov ax, reverseb
+    add startIdxb, ax
+    ;---------------calculate precentage------------------
+
+    finishGetScoreb:
+    mov ax, reverseb
+    cmp al, 0
+    jz increaseAgainb
+    jmp leavestartAsIsb
+    increaseAgainb:
+    add startIdxa, 2
+    leavestartAsIsb:
+
+    mov ax, 50
+    mul startIdxb
+
+    mov bx, pathCount
+    xor dx, dx
+    div bx
+
+    mov user2scorenum, al
+
+    ret
+getCarbScore ENDP
+
+
+updateScoreA PROC
+    mov reverseA, 4 ;check next instead of prev
+    mov passedChecka, 0
+    mov nextLinea, 0
+    call getCaraScore
+    cmp passedChecka, 0
+    jz checkNextA
+    jmp checkReverseA
+    checkNextA:
+    mov nextLinea, 1
+    mov passedChecka, 0
+    call getCaraScore
+    cmp passedChecka, 0
+    jz checkReverseA
+    jmp finishUpdateScoreA
+    
+    checkReverseA:
+    ; mov reverseA, 0 ;check prev instead of next
+    ; mov passedChecka, 0
+    ; mov nextLinea, 1
+    ; call getCaraScore
+    ; cmp passedChecka, 0
+    ; jz checkRevNextA
+    ; jmp finishUpdateScoreA
+    ; checkRevNextA:
+    ; mov nextLinea, 0
+    ; mov passedChecka, 0
+    ; call getCaraScore
+    finishUpdateScoreA:
+
+    mov ah, 0
+    mov al, user1scorenum
+    convertnumtostr user1scorenumstr
+    showusermacro puser1scorenum,colorcara,counteruser1sizescorenum,user1sizescorenum,user1scorenumstr
+
+    ret
+updateScoreA ENDP
+
+updateScoreB PROC
+    mov reverseB, 4 ;check next instead of prev
+    mov passedCheckB, 0
+    mov nextLineB, 0
+    call getCarBScore
+    cmp passedCheckB, 0
+    jz checkNextB
+    jmp checkReverseB
+    checkNextB:
+    mov nextLineB, 1
+    mov passedCheckB, 0
+    call getCarBScore
+    cmp passedCheckB, 0
+    jz checkReverseB
+    
+    checkReverseB:
+    ; mov reverseB, 0 ;check prev instead of next
+    ; mov passedCheckB, 0
+    ; mov nextLineB, 1
+    ; call getCarBScore
+    ; cmp passedCheckB, 0
+    ; jz checkRevNextB
+    ; jmp finishUpdateScoreB
+    ; checkRevNextB:
+    ; mov nextLineB, 0
+    ; mov passedCheckB, 0
+    ; call getCarBScore
+    finishUpdateScoreB:
+
+    mov ah, 0
+    mov al, user2scorenum
+    convertnumtostr user2scorenumstr
+    showusermacro puser2scorenum,colorcarb,counteruser2sizescorenum,user2sizescorenum,user2scorenumstr
+    ret
+updateScoreB ENDP
+
+drawlogo proc
+    mov ax,320
+    mov bx,30
+    mul bx
+    add ax,110
+    mov di,ax
+    lea si,logo
+    mov cl,120
+    mov ch,23
+    cld
+    lopmainmenuimg:
+    movsb
+    dec cl
+    cmp cl,0
+    jne lopmainmenuimg
+    add di,320-120
+    mov cl,120
+    dec ch
+    cmp ch,0
+    jne lopmainmenuimg
+    ret
+drawlogo endp
 
 ExitProgram proc
     call clearScreen
@@ -5015,25 +5656,38 @@ ExitProgram ENDP
 
 mainMenu PROC
     call clearScreen
-    ChangeCursor 25,6
-    ShowMessage ChatPrompt
-    ChangeCursor 25,10
-    ShowMessage GamePrompt
-    ChangeCursor 25,14
-    ShowMessage EndPrompt
-    ChangeCursor 0,21
-    ShowMessage Notif
+
+    call videoMode 
+
+    call drawlogo
+
+    mov dl,6
+    mov dh,10
+    showusermacro dx,02h,counterChatPrompt,sizeChatPrompt,ChatPrompt
+
+    mov dl,6
+    mov dh,14
+    showusermacro dx,0ah,counterGamePrompt,sizeGamePrompt,GamePrompt
+
+    mov dl,6
+    mov dh,18
+    showusermacro dx,02h,counterEndPrompt,sizeEndPrompt,EndPrompt
+
+    mov dl,0
+    mov dh,22
+    showusermacro dx,0ah,counterNotif,sizeNotif,Notif
+
+    mov dl,0
+    mov dh,23
+    showusermacro dx,0ah,counterNotif,sizeNotif,Notif
+
     MAINWAITFORKEY:
-    mov ah,0
-    int 16h
-    mov bh,3Ch
-    CMP AH,bh
+
+    CMP [byte ptr KeyList + KeyF1], 1
+    JE MAINWAITFORKEY
+    CMP [byte ptr KeyList + KeyF2], 1
     JE  Game
-    mov bh,3Bh
-    CMP ah,bh
-    JE  MAINWAITFORKEY
-    mov bh,01h
-    CMP ah,bh
+    CMP [byte ptr KeyList + KeyESC], 1
     JE  Exit
     JMP MAINWAITFORKEY
 
@@ -5044,19 +5698,44 @@ mainMenu PROC
 mainMenu ENDP
 
 takeUserInput PROC
+    GetName1:
     call clearScreen
+
     ShowMessage NamePrompt1
     ShowMessage Enterkey
     mov ah,0Ah
     mov dx,offset UsernameInit1
     int 21h
     ShowMessage Enterkey
+    mov al,Username1
+    cmp al,'A'
+    jl GetName1
+    cmp al,'Z'
+    jle GetName2
+    cmp al,'a'
+    jl GetName1
+    cmp al,'z'
+    jle GetName2
+    jmp GetName1
+    GetName2:
+    call clearScreen
     ShowMessage NamePrompt2
     ShowMessage Enterkey
     mov ah,0Ah
     mov dx,offset UsernameInit2
     int 21h
     ShowMessage Enterkey
+    mov al,Username2
+    cmp al,'A'
+    jl GetName2
+    cmp al,'Z'
+    jle UsernamesEntered
+    cmp al,'a'
+    jl GetName2
+    cmp al,'z'
+    jle UsernamesEntered
+    jmp GetName2
+    UsernamesEntered:
     ShowMessage EnterPrompt
     WaitforEnter:
     mov ah,0
@@ -5068,6 +5747,31 @@ takeUserInput PROC
     continueInput:
     ret
 takeUserInput ENDP
+
+outputScores PROC
+    ;----------------------------user1-info-------------------------------------
+    mov dl, 46
+    mov dh, 11
+    showusermacro dx,colorcara,counteruser1sizescore,user1sizescore,user1score
+    mov ah, 0
+    mov al, user1scorenum
+    convertnumtostr user1scorenumstr
+    mov dl, 52
+    mov dh, 11
+    showusermacro dx,colorcara,counteruser1sizescorenum,user1sizescorenum,user1scorenumstr
+
+    ;----------------------------user2-info-------------------------------------
+    mov dl, 64
+    mov dh, 11
+    showusermacro dx,colorcarb,counteruser2sizescore,user2sizescore,user2score
+    mov ah, 0
+    mov al, user2scorenum
+    convertnumtostr user2scorenumstr
+    mov dl, 70
+    mov dh, 11
+    showusermacro dx,colorcarb,counteruser2sizescorenum,user2sizescorenum,user2scorenumstr
+    ret
+outputScores ENDP
 
 handleGameEnd PROC
 
@@ -5082,6 +5786,13 @@ handleGameEnd PROC
 
     ; Display the string
     mov ah, 09h     ; Function: Display string
+    cmp WinningState, 4
+    jz exitgamemsg
+    jmp nextMsg0
+    exitgamemsg:
+    call videoMode
+    call outputScores
+    nextMsg0:
     cmp WinningState, 3
     jz DrawMsg
     jmp nextMsg1
@@ -5092,20 +5803,42 @@ handleGameEnd PROC
     jz P1WonMsg
     jmp nextMsg2
     P1WonMsg:
+    inc [user1scorenum]
     lea dx, [user1Won]   
     nextMsg2:
     cmp WinningState, 2
     jz P2WonMsg
     jmp displayEndingMessage
     P2WonMsg:
+    inc [user2scorenum]
     lea dx, [user2Won]
-    displayEndingMessage:   
+    displayEndingMessage: 
+
+    cmp winningState, 4
+    jz alreadyPrinted  
     int 21h
+    alreadyPrinted:
+
+    mov ah,2ch   
+    int 21h
+    mov [endTime],dh
+    add endTime,5d
+    mov al,endTime
+    mov endTime,60d
+    mov ah,0
+    div endTime
+    mov endTime,ah
+
+    waitingLoop:
+        mov ah, 2ch   
+        int 21h
+        cmp endTime, dh
+    jnz waitingLoop
 
     ret
 handleGameEnd ENDP
 
-moveCars PROC
+moveCars  PROC 
     drawinitcar xa,ya,car1image   ; car a
     drawinitcar xb,yb,car2image   ; car b
     mov ah,2ch   
@@ -5118,6 +5851,10 @@ moveCars PROC
     div RepeatTime
     mov RepeatTime,ah
 
+
+    mov startIdxa, 2
+    mov startIdxb, 2
+    
     lop:
     call CheckGameFinish
     cmp WinningState, 0
@@ -5139,8 +5876,6 @@ moveCars PROC
     mov RepeatTime,ah
 
     continue:
-    
-    call handlekeylist
 
     cmp rocketmoving,1
     jne movcars
@@ -5180,31 +5915,56 @@ moveCars PROC
     call showuserspower
     call checkusersrocket
 
+    call updateScoreA
+    call updateScoreB
+
+    cmp [byte ptr keyList + keyF4], 1
+    jz exitgame
+
+
     jmp lop
+
+    exitgame:    
+    mov [winningstate], 4
+
     finishmoveCars:
-    call handleGameEnd
+    
+
     ret
 moveCars ENDP
 
+initGame PROC
+    call ResetEveryBit
+    mov posita, 'w'
+    mov positb, 'w'
+    mov positna, 'w'
+    mov positnb, 'w'
+    mov [firecara], 0
+    mov [firecarb], 0
+    mov [havespeeda], 0
+    mov [havedelaya], 0
+    mov [havepassa], 0
+    mov [obstaclea], 0  
+    mov [havespeedb], 0
+    mov [havedelayb], 0
+    mov [havepassb], 0
+    mov [obstacleb], 0  
+    mov [ActivatePassa], 0
+    mov [ActivatePassb], 0
+    mov xa, smallmargin + 5
+    mov ya, verticalScreen - 5 - smallMargin 
+    mov xna, smallmargin + 5
+    mov yna, verticalScreen - 5 - smallMargin 
+    mov xb, smallmargin + 12
+    mov yb, verticalScreen - 5 - smallMargin
+    mov xnb, smallmargin + 12
+    mov ynb, verticalScreen - 5 - smallMargin
+    mov startIdx, 0
+    mov winningstate, 0
+    ret
+initGame ENDP
+
 showusername proc
-    mov al, [usernameInit1 + 1]
-    mov user1size, al
-    mov al, [usernameInit2 + 1]
-    mov user2size, al
-
-    add yuser1car, chatmargin
-    add yuser1power, chatmargin
-    add yuser1rocket, chatmargin
-    add puser1score, chatmarginhex
-    add pUserName1, chatmarginhex
-    add puser1scorenum, chatmarginhex
-
-    add yuser2car, chatmargin
-    add yuser2power, chatmargin
-    add yuser2rocket, chatmargin
-    add puser2score, chatmarginhex
-    add pUserName2, chatmarginhex
-    add puser2scorenum, chatmarginhex
 
     mov ax,320
     mov cx,verticalScreen
@@ -5217,21 +5977,13 @@ showusername proc
     inc di
     loop labelhorizontalline
 
-    mov ah, 0
-    mov al, user1size
-    add xuser1car, ax
-    mov al, user2size
-    add xuser2car, ax
 
     showusermacro pUserName1,colorcara,counteruser1size,user1size,UserName1
     showusermacro pUserName2,colorcarb,counteruser2size,user2size,UserName2
     ;----------------------------user1-info-------------------------------------
     showusermacro puser1score,colorcara,counteruser1sizescore,user1sizescore,user1score
-    showusermacro puser1scorenum,colorcara,counteruser1sizescorenum,user1sizescorenum,user1scorenum
-
     ;----------------------------user2-info-------------------------------------
     showusermacro puser2score,colorcarb,counteruser2sizescore,user2sizescore,user2score
-    showusermacro puser2scorenum,colorcarb,counteruser2sizescorenum,user2sizescorenum,user2scorenum
 
     mov ax,320
     mov cx,verticalScreen
@@ -5255,10 +6007,18 @@ MAIN PROC FAR
     mov ax, 0A000h
     mov es,ax
 
-    call takeUserInput
-    call MainMenu
 
+    call takeUserInput
     call overrideInt
+
+    call initUsernames
+
+    loopMainMenu:
+    
+    call initGame
+
+    call MainMenu
+    
 
     call designPath
     call videoMode
@@ -5272,7 +6032,11 @@ MAIN PROC FAR
 
     call moveCars
 
-    ;terminate 
+    call handleGameEnd
+
+    jmp loopMainMenu
+
+    ; ;terminate 
     mov ah, 4CH
     int 21H
     
